@@ -47,17 +47,48 @@ SOFTWARE.
 
 # Build Instructions
 
+(0.) On MacOS: 
+
+
+(Taken from https://peter-slattery.github.io/4coder-for-mac/)
+
+0.0. brew install coreutils
+
+The 4coder-non-source repo has prebuild libraries for freetype. Those libraries are built for Macs running on Intel chips.
+
+I figured out how to do this by following nakst’s excellent tutorial here. It turns out, much of that isn’t necessary for our purposes however. I will detail the steps I took here.
+0.1. Run the following to get the freetype source code:
+
+curl https://mirrors.up.pt/pub/nongnu/freetype/freetype-2.9.tar.gz > freetype-2.9.tar.gz
+gunzip freetype-2.9.tar.gz
+tar -xf freetype-2.9.tar
+
+0.2. cd into the freetype-2.9 folder
+
+0.3. Run this configure command:
+./configure --without-zlib --without-bzip2 \
+--without-png --without-harfbuzz \
+CFLAGS="-g -ffreestanding -Wno-unused-function"
+
+0.4. Run the make command: make ANSIFLAGS="" > /dev/null
+
+0.5. Copy freetype-2.9/objs/.libs/libfreetype.a to 4ed/4coder-non-source/foreign/x64/libfreetype-mac.a (Remember to rename the original if you want to compile for x64 at some point in the future)
+
+
+
 1. Create an empty folder named "4ed" to contain the codebase.
 2. Clone the repository
 3. Rename the folder containing the repository to "code"
-4. At the same level as the "4ed" folder, clone the "4coder-non-source" repository
-5. A. On windows setup the visual studio command line magic sauce so that "cl" works
+4. At the same level as the "code" folder, clone the "4coder-non-source" repository
+5. At the same level as the "code" folder, create an empty folder and name it "build"
+6. A. On windows setup the visual studio command line magic sauce so that "cl" works
    B. On linux setup g++
    C. On mac setup clang
-6. Navigate to the "4ed/code" folder.
-7. A. On windows run "bin\build.bat"
+7. Navigate to the "4ed/code" folder.
+8. A. On windows run "bin\build.bat"
    B. On linux run "bin\build-linux.sh"
-   C. On linux run "bin\build-mac.sh"
+   C. On MacOS run "bin\build-mac.sh"
+(9.) On Windows, Make sure you copy the "fonts" folder from the "4coder-non-source" repo into the executable folder  
 
 
 # Notes on Major Issues
