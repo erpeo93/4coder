@@ -208,6 +208,7 @@ CUSTOM_DOC("Example of query_user_string and query_user_number")
  }
 }
 
+#if 0
 global Audio_Control the_music_control = {};
 
 CUSTOM_COMMAND_SIG(music_start)
@@ -262,7 +263,7 @@ CUSTOM_DOC("Play the hit sound effect")
   index += 1;
  }
 }
-
+#endif
 
 // BOTTOM
 

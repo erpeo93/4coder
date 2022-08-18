@@ -299,15 +299,20 @@ map_get_binding_non_recursive(Command_Map *map, Input_Event *event, Binding_Matc
                         
                         case BindingMatchRule_Loose:
                         {
+                            i32 best_match = 0;
                             for (SNode *node = list->first;
                                  node != 0;
                                  node = node->next){
                                 Command_Modified_Binding *mod_binding = CastFromMember(Command_Modified_Binding, order_node, node);
                                 Input_Modifier_Set *binding_mod_set = &mod_binding->mods;
-                                if (map_loose_match(binding_mod_set, breakdown.mod_set)){
+                                i32 match = map_loose_match(binding_mod_set, breakdown.mod_set);
+                                if (match && match > best_match) {
+                                    best_match = match;
                                     result = mod_binding->binding;
-                                    goto done;
-                                }
+                                }                                
+                            }
+                            if (best_match != 0) {
+                                goto done;
                             }
                         }break;
                     }

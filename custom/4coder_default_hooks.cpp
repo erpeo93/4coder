@@ -21,7 +21,7 @@ CUSTOM_DOC("Default command for responding to a startup event")
     }
     
     {
-        def_audio_init();
+        //def_audio_init();
     }
     
     {
