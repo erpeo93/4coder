@@ -21,34 +21,44 @@
 CUSTOM_COMMAND_SIG(move_to_line_boundary_backward)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
-    //Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-    
-    i64 oldPos = view_get_cursor_pos(app, view);
-    seek_beginning_of_line(app);
-    i64 currentPos = view_get_cursor_pos(app, view);
-    
-    if(oldPos == currentPos)
-    {
-        move_up(app);
-        seek_end_of_line(app);
-    }
+    while(true)
+{
+        i64 oldPos = view_get_cursor_pos(app, view);
+        seek_beginning_of_line(app);
+        i64 currentPos = view_get_cursor_pos(app, view);
+        
+        if(oldPos == currentPos)
+        {
+            move_up(app);
+            seek_end_of_line(app);
+        }
+        else
+{
+            break;
+}
+}
 }
 
 
 CUSTOM_COMMAND_SIG(move_to_line_boundary_forward)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
-    //Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-    
-    i64 oldPos = view_get_cursor_pos(app, view);
-    seek_end_of_line(app);
-    i64 currentPos = view_get_cursor_pos(app, view);
-    
-    if(oldPos == currentPos)
-    {
-        move_down(app);
-        seek_beginning_of_line(app);
-    }
+    while(true)
+{
+        i64 oldPos = view_get_cursor_pos(app, view);
+        seek_end_of_line(app);
+        i64 currentPos = view_get_cursor_pos(app, view);
+        
+        if(oldPos == currentPos)
+        {
+            move_down(app);
+            seek_beginning_of_line(app);
+        }
+        else
+{
+            break;
+}
+}
 }
 
 CUSTOM_COMMAND_SIG(delete_next_line)
