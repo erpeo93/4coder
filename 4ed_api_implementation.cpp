@@ -191,6 +191,23 @@ get_buffer_next(Application_Links *app, Buffer_ID buffer_id, Access_Flag access)
 }
 
 api(custom) function Buffer_ID
+get_buffer_prev(Application_Links *app, Buffer_ID buffer_id, Access_Flag access)
+{
+    Models *models = (Models*)app->cmd_context;
+    Working_Set *working_set = &models->working_set;
+    Editing_File *file = working_set_get_file(working_set, buffer_id);
+    file = file_get_prev(working_set, file);
+    for (;file != 0 && !access_test(file_get_access_flags(file), access);){
+        file = file_get_prev(working_set, file);
+    }
+    Buffer_ID result = 0;
+    if (file != 0){
+        result = file->id;
+    }
+    return(result);
+}
+
+api(custom) function Buffer_ID
 get_buffer_by_name(Application_Links *app, String_Const_u8 name, Access_Flag access)
 {
     Models *models = (Models*)app->cmd_context;
@@ -911,7 +928,7 @@ buffer_kill(Application_Links *app, Buffer_ID buffer_id, Buffer_Kill_Flag flags)
                         Assert(file_node != order);
                         view->file = 0;
                         Editing_File *new_file = CastFromMember(Editing_File, touch_node, file_node);
-                        view_set_file(tctx, models, view, new_file);
+                        view_set_file(tctx, models, view, new_file, true);
                         file_node = file_node->next;
                         if (file_node == order){
                             file_node = file_node->next;
@@ -992,7 +1009,7 @@ buffer_reopen(Application_Links *app, Buffer_ID buffer_id, Buffer_Reopen_Flag fl
                         file_create_from_string(tctx, models, file, SCu8(file_memory, attributes.size), attributes);
                         
                         for (i32 i = 0; i < vptr_count; ++i){
-                            view_set_file(tctx, models, vptrs[i], file);
+                            view_set_file(tctx, models, vptrs[i], file, true);
                             
                             vptrs[i]->file = file;
                             i64 line = line_numbers[i];
@@ -1678,7 +1695,8 @@ view_set_buffer(Application_Links *app, View_ID view_id, Buffer_ID buffer_id, Se
         Editing_File *file = working_set_get_file(&models->working_set, buffer_id);
         if (api_check_buffer(file)){
             if (file != view->file){
-                view_set_file(app->tctx, models, view, file);
+                bool update_touch_list = !(flags & SetBuffer_DontUpdateTouchList);
+                view_set_file(app->tctx, models, view, file, update_touch_list);
                 if (!(flags & SetBuffer_KeepOriginalGUI)){
                     view_quit_ui(app->tctx, models, view);
                 }

@@ -8,7 +8,7 @@ and list all locations.
 global String_Const_u8 search_name = string_u8_litexpr("*search*");
 
 internal void
-print_string_match_list_to_buffer(Application_Links *app, Buffer_ID out_buffer_id, String_Match_List matches){
+print_string_match_list_to_buffer(Application_Links *app, Buffer_ID out_buffer_id, String_Match_List matches, u32 offset){
     Scratch_Block scratch(app);
     clear_buffer(app, out_buffer_id);
     Buffer_Insertion out = begin_buffer_insertion_at_buffered(app, out_buffer_id, 0, scratch, KB(64));
@@ -36,7 +36,7 @@ print_string_match_list_to_buffer(Application_Links *app, Buffer_ID out_buffer_i
                     }
                 }
                 
-                Buffer_Cursor cursor = buffer_compute_cursor(app, current_buffer, seek_pos(node->range.first));
+                Buffer_Cursor cursor = buffer_compute_cursor(app, current_buffer, seek_pos(node->range.first + offset));
                 Temp_Memory line_temp = begin_temp(scratch);
                 String_Const_u8 full_line_str = push_buffer_line(app, scratch, current_buffer, cursor.line);
                 String_Const_u8 line_str = string_skip_chop_whitespace(full_line_str);
@@ -55,24 +55,33 @@ print_string_match_list_to_buffer(Application_Links *app, Buffer_ID out_buffer_i
 }
 
 internal void
-print_all_matches_all_buffers(Application_Links *app, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags, Buffer_ID out_buffer_id){
+print_all_matches_buffer(Application_Links *app, Buffer_ID buffer, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags, Buffer_ID out_buffer_id, u32 start_offset){
+    Scratch_Block scratch(app);
+    String_Match_List matches = find_all_matches_buffer(app, buffer, scratch, match_patterns, must_have_flags, must_not_have_flags);
+    string_match_list_filter_remove_buffer(&matches, out_buffer_id);
+    string_match_list_filter_remove_buffer_predicate(app, &matches, buffer_has_name_with_star);
+    print_string_match_list_to_buffer(app, out_buffer_id, matches, start_offset);
+}
+
+internal void
+print_all_matches_all_buffers(Application_Links *app, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags, Buffer_ID out_buffer_id, u32 start_offset){
     Scratch_Block scratch(app);
     String_Match_List matches = find_all_matches_all_buffers(app, scratch, match_patterns, must_have_flags, must_not_have_flags);
     string_match_list_filter_remove_buffer(&matches, out_buffer_id);
     string_match_list_filter_remove_buffer_predicate(app, &matches, buffer_has_name_with_star);
-    print_string_match_list_to_buffer(app, out_buffer_id, matches);
+    print_string_match_list_to_buffer(app, out_buffer_id, matches, start_offset);
 }
 
 internal void
 print_all_matches_all_buffers(Application_Links *app, String_Const_u8 pattern, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags, Buffer_ID out_buffer_id){
     String_Const_u8_Array array = {&pattern, 1};
-    print_all_matches_all_buffers(app, array, must_have_flags, must_not_have_flags, out_buffer_id);
+    print_all_matches_all_buffers(app, array, must_have_flags, must_not_have_flags, out_buffer_id, 0);
 }
 
 internal void
 print_all_matches_all_buffers_to_search(Application_Links *app, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags, View_ID default_target_view){
     Buffer_ID search_buffer = create_or_switch_to_buffer_and_clear_by_name(app, search_name, default_target_view);
-    print_all_matches_all_buffers(app, match_patterns, must_have_flags, must_not_have_flags, search_buffer);
+    print_all_matches_all_buffers(app, match_patterns, must_have_flags, must_not_have_flags, search_buffer, 0);
 }
 
 internal void
@@ -116,6 +125,43 @@ query_user_list_definition_needle(Application_Links *app, Arena *arena){
     u8 *space = push_array(arena, u8, KB(1));
     String_Const_u8 base_needle = get_query_string(app, "List Definitions For: ", space, KB(1));
     return(user_list_definition_array(app, arena, base_needle));
+}
+
+internal void
+list_all_locations__generic_buffer_offset(Application_Links *app, String_Const_u8_Array needle, List_All_Locations_Flag flags, Buffer_ID buffer, u32 start_offset){
+    if (needle.count > 0){
+        String_Match_Flag must_have_flags = 0;
+        String_Match_Flag must_not_have_flags = 0;
+        if (HasFlag(flags, ListAllLocationsFlag_CaseSensitive)){
+            AddFlag(must_have_flags, StringMatch_CaseSensitive);
+        }
+        if (!HasFlag(flags, ListAllLocationsFlag_MatchSubstring)){
+            AddFlag(must_not_have_flags, StringMatch_LeftSideSloppy);
+            AddFlag(must_not_have_flags, StringMatch_RightSideSloppy);
+        }
+        print_all_matches_all_buffers(app, needle, must_have_flags, must_not_have_flags, buffer, start_offset);
+    }
+}
+
+internal void
+list_all_locations__generic_buffer(Application_Links *app, String_Const_u8_Array needle, List_All_Locations_Flag flags, Buffer_ID buffer){
+    list_all_locations__generic_buffer_offset(app, needle, flags, buffer, 0);
+}
+
+internal void
+list_all_locations_in_buffer__generic_buffer(Application_Links *app, Buffer_ID buffer, String_Const_u8_Array needle, List_All_Locations_Flag flags, Buffer_ID output_buffer, u32 start_offset){
+    if (needle.count > 0){
+        String_Match_Flag must_have_flags = 0;
+        String_Match_Flag must_not_have_flags = 0;
+        if (HasFlag(flags, ListAllLocationsFlag_CaseSensitive)){
+            AddFlag(must_have_flags, StringMatch_CaseSensitive);
+        }
+        if (!HasFlag(flags, ListAllLocationsFlag_MatchSubstring)){
+            AddFlag(must_not_have_flags, StringMatch_LeftSideSloppy);
+            AddFlag(must_not_have_flags, StringMatch_RightSideSloppy);
+        }
+        print_all_matches_buffer(app, buffer, needle, must_have_flags, must_not_have_flags, output_buffer, start_offset);
+    }
 }
 
 internal void

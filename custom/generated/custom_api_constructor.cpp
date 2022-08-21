@@ -57,7 +57,13 @@ API_Call *call = api_call_with_location(arena, result, string_u8_litexpr("get_bu
 api_param(arena, call, "Application_Links*", "app");
 api_param(arena, call, "Buffer_ID", "buffer_id");
 api_param(arena, call, "Access_Flag", "access");
-}
+    }
+    {
+        API_Call *call = api_call_with_location(arena, result, string_u8_litexpr("get_buffer_prev"), string_u8_litexpr("Buffer_ID"), string_u8_litexpr(""));
+        api_param(arena, call, "Application_Links*", "app");
+        api_param(arena, call, "Buffer_ID", "buffer_id");
+        api_param(arena, call, "Access_Flag", "access");
+    }
 {
 API_Call *call = api_call_with_location(arena, result, string_u8_litexpr("get_buffer_by_name"), string_u8_litexpr("Buffer_ID"), string_u8_litexpr(""));
 api_param(arena, call, "Application_Links*", "app");

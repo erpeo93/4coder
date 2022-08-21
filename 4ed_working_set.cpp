@@ -495,6 +495,24 @@ file_get_next(Working_Set *working_set, Editing_File *file){
     return(file);
 }
 
+internal Editing_File*
+file_get_prev(Working_Set *working_set, Editing_File *file){
+    if (file != 0){
+        Node *node = file->touch_node.prev;
+        file = CastFromMember(Editing_File, touch_node, node);
+        if (node == &working_set->touch_order_sentinel){
+            file = 0;
+        }
+    }
+    else{
+        if (working_set->active_file_count > 0){
+            Node *node = working_set->touch_order_sentinel.prev;
+            file = CastFromMember(Editing_File, touch_node, node);
+        }
+    }
+    return(file);
+}
+
 ////////////////////////////////
 
 internal Editing_File*

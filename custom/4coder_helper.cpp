@@ -1383,26 +1383,33 @@ clear_buffer(Application_Links *app, Buffer_ID buffer){
 ////////////////////////////////
 
 function String_Match_List
-find_all_matches_all_buffers(Application_Links *app, Arena *arena, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags){
-    String_Match_List all_matches = {};
-    for (Buffer_ID buffer = get_buffer_next(app, 0, Access_Always);
-         buffer != 0;
-         buffer = get_buffer_next(app, buffer, Access_Always)){
-        String_Match_List buffer_matches = {};
+find_all_matches_buffer(Application_Links *app, Buffer_ID buffer, Arena *arena, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags){
+    String_Match_List result = {};
         for (i32 i = 0; i < match_patterns.count; i += 1){
             Range_i64 range = buffer_range(app, buffer);
             String_Match_List pattern_matches = buffer_find_all_matches(app, arena, buffer, i, range, match_patterns.vals[i],
                                                                         &character_predicate_alpha_numeric_underscore_utf8, Scan_Forward);
             string_match_list_filter_flags(&pattern_matches, must_have_flags, must_not_have_flags);
             if (pattern_matches.count > 0){
-                if (buffer_matches.count == 0){
-                    buffer_matches = pattern_matches;
+                if (result.count == 0){
+                     result = pattern_matches;
                 }
                 else{
-                    buffer_matches = string_match_list_merge_front_to_back(&buffer_matches, &pattern_matches);
+                     result = string_match_list_merge_front_to_back(&result, &pattern_matches);
                 }
             }
         }
+    return(result);
+}
+
+
+function String_Match_List
+find_all_matches_all_buffers(Application_Links *app, Arena *arena, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags){
+    String_Match_List all_matches = {};
+    for (Buffer_ID buffer = get_buffer_next(app, 0, Access_Always);
+         buffer != 0;
+         buffer = get_buffer_next(app, buffer, Access_Always)){
+        String_Match_List buffer_matches = find_all_matches_buffer(app, buffer, arena, match_patterns, must_have_flags, must_not_have_flags);
         all_matches = string_match_list_join(&all_matches, &buffer_matches);
     }
     return(all_matches);

@@ -281,7 +281,8 @@ enum{
 api(custom)
 typedef u32 Set_Buffer_Flag;
 enum{
-    SetBuffer_KeepOriginalGUI = 0x1
+    SetBuffer_KeepOriginalGUI = 0x1,
+    SetBuffer_DontUpdateTouchList = 0x2,
 };
 
 api(custom)

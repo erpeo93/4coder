@@ -1,5 +1,4 @@
-/*
-4coder_default_bidings.cpp - Supplies the default bindings used for default 4coder behavior.
+/*4coder_default_bidings.cpp - Supplies the default bindings used for default 4coder behavior.
 */
 
 // TOP
@@ -22,7 +21,7 @@ CUSTOM_COMMAND_SIG(move_to_line_boundary_backward)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
     while(true)
-{
+    {
         i64 oldPos = view_get_cursor_pos(app, view);
         seek_beginning_of_line(app);
         i64 currentPos = view_get_cursor_pos(app, view);
@@ -33,18 +32,17 @@ CUSTOM_COMMAND_SIG(move_to_line_boundary_backward)
             seek_end_of_line(app);
         }
         else
-{
+        {
             break;
+        }
+    }
 }
-}
-}
-
 
 CUSTOM_COMMAND_SIG(move_to_line_boundary_forward)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
     while(true)
-{
+    {
         i64 oldPos = view_get_cursor_pos(app, view);
         seek_end_of_line(app);
         i64 currentPos = view_get_cursor_pos(app, view);
@@ -55,10 +53,10 @@ CUSTOM_COMMAND_SIG(move_to_line_boundary_forward)
             seek_beginning_of_line(app);
         }
         else
-{
+        {
             break;
-}
-}
+        }
+    }
 }
 
 CUSTOM_COMMAND_SIG(delete_next_line)
@@ -235,22 +233,9 @@ CUSTOM_COMMAND_SIG(custom_move_right)
     enqueue_virtual_event(app, &event);
 }
 
-CUSTOM_COMMAND_SIG(write_custom_odin_if0)
+CUSTOM_COMMAND_SIG(comment_block)
 {
     place_begin_and_end_on_own_lines(app, "/* ", " //*/");
-}
-
-CUSTOM_COMMAND_SIG(close_buffer)
-{
-    // TODO(Leonardo): implement this!
-    view_buffer_other_panel(app);
-    change_active_panel(app);
-    cursor_mark_swap(app);
-}
-
-CUSTOM_COMMAND_SIG(switch_buffer_interactive)
-{
-    // TODO(Leonardo): implement this!
 }
 
 CUSTOM_COMMAND_SIG(place_line_in_scope)
@@ -259,7 +244,17 @@ CUSTOM_COMMAND_SIG(place_line_in_scope)
     set_mark(app);
     seek_end_of_line(app);
     place_in_scope(app);
+    
 }
+
+CUSTOM_COMMAND_SIG(place_line_in_scope_and_semicolon)
+{
+    seek_beginning_of_line(app);
+    set_mark(app);
+    seek_end_of_line(app);
+    place_begin_and_end_on_own_lines(app, "{", "};");
+}
+
 CUSTOM_COMMAND_SIG(place_line_after_scope_in_scope)
 {
     select_surrounding_scope(app);
@@ -627,23 +622,6 @@ CUSTOM_COMMAND_SIG(pick_color)
 #endif
 }
 
-CUSTOM_COMMAND_SIG(list_all_functions_current_buffer_lister2)
-{
-}
-
-CUSTOM_COMMAND_SIG(interactive_search_function)
-{
-}
-
-CUSTOM_COMMAND_SIG(list_all_type_definitions_current_buffer_lister)
-{
-    
-}
-
-CUSTOM_COMMAND_SIG(interactive_search_type_definition)
-{
-    
-}
 
 CUSTOM_COMMAND_SIG(keyboard_macro_start_stop_recording)
 {
@@ -658,131 +636,487 @@ CUSTOM_COMMAND_SIG(keyboard_macro_start_stop_recording)
     }
 }
 
+CUSTOM_COMMAND_SIG(save_all_dirty_and_build_in_build_panel)
+{
+    save_all_dirty_buffers(app);
+    build_in_build_panel(app);
+}
+
+CUSTOM_COMMAND_SIG(view_jump_list_with_lister_and_close_jump_list)
+{
+    Heap *heap = &global_heap;
+    View_ID view = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
+    Marker_List *list = get_or_make_list_for_buffer(app, heap, buffer);
+    if (list != 0){
+        Jump_Lister_Result jump = get_jump_index_from_user(app, list, "Jump:");
+        jump_to_jump_lister_result(app, view, list, &jump);
+        delete_marker_list(list);
+    }
+}
+
+CUSTOM_COMMAND_SIG(cut_line)
+{
+    seek_beginning_of_line(app);
+    set_mark(app);
+    seek_end_of_line(app);
+    copy(app);
+    
+    delete_line(app);
+}
+
+
+CUSTOM_COMMAND_SIG(move_range_up)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    i64 mark_pos = view_get_mark_pos(app, view);
+    i64 cursor_pos = view_get_cursor_pos(app, view);
+    
+    if(mark_pos != cursor_pos)
+    {
+        Scratch_Block scratch(app);
+        
+        Range_i64 range = get_view_range(app, view);
+        String_Const_u8 text = push_buffer_range(app, scratch, buffer, range);
+        delete_range(app);
+        move_up(app);
+        seek_beginning_of_line(app);
+        
+        i64 pos = view_get_cursor_pos(app, view);
+        buffer_replace_range(app, buffer, Ii64(pos), text);
+        
+        if(mark_pos < cursor_pos)
+        {
+            view_set_mark(app, view, seek_pos(pos));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos + (i32)text.size));
+        }
+        else
+        {
+            view_set_mark(app, view, seek_pos(pos + (i32) text.size));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+        }
+        
+    }
+}
+
+CUSTOM_COMMAND_SIG(move_range_down)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    i64 mark_pos = view_get_mark_pos(app, view);
+    i64 cursor_pos = view_get_cursor_pos(app, view);
+    
+    if(mark_pos != cursor_pos)
+    {
+        Scratch_Block scratch(app);
+        
+        Range_i64 range = get_view_range(app, view);
+        String_Const_u8 text = push_buffer_range(app, scratch, buffer, range);
+        delete_range(app);
+        move_down(app);
+        seek_beginning_of_line(app);
+        
+        i64 pos = view_get_cursor_pos(app, view);
+        buffer_replace_range(app, buffer, Ii64(pos), text);
+        
+        if(mark_pos < cursor_pos)
+        {
+            view_set_mark(app, view, seek_pos(pos));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos + (i32)text.size));
+        }
+        else
+        {
+            view_set_mark(app, view, seek_pos(pos + (i32) text.size));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+        }
+    }
+}
+
+CUSTOM_COMMAND_SIG(duplicate_range)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    i64 mark_pos = view_get_mark_pos(app, view);
+    i64 cursor_pos = view_get_cursor_pos(app, view);
+    
+    if(mark_pos != cursor_pos)
+    {
+        Scratch_Block scratch(app);
+        Range_i64 range = get_view_range(app, view);
+        String_Const_u8 text = push_buffer_range(app, scratch, buffer, range);
+        text = push_u8_stringf(scratch, "%.*s\n", string_expand(text));
+        
+        i64 pos = mark_pos;
+        if(cursor_pos < mark_pos)
+        {
+            pos = cursor_pos;
+        }
+        
+        buffer_replace_range(app, buffer, Ii64(pos), text);
+        
+        if(mark_pos < cursor_pos)
+        {
+            view_set_mark(app, view, seek_pos(pos));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos + (i32)text.size - 1));
+        }
+        else
+        {
+            view_set_mark(app, view, seek_pos(pos + (i32) text.size));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+        }
+    }
+}
+
+CUSTOM_COMMAND_SIG(delete_from_beginning_of_line)
+{
+    set_mark(app);
+    seek_beginning_of_line(app);
+    delete_range(app);
+}
+
+
+CUSTOM_COMMAND_SIG(delete_line_add_to_clip)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    seek_beginning_of_line(app);
+    set_mark(app);
+    seek_end_of_line(app);
+    
+    Scratch_Block scratch(app);
+    
+    Range_i64 range = get_view_range(app, view);
+    
+    String_Const_u8 line = push_buffer_range(app, scratch, buffer, range);
+    delete_line(app);
+    
+    String_Const_u8 to_copy = {};
+    if(clipboard_count(0) != 0)
+    {
+        String_Const_u8 clipboard = push_clipboard_index(scratch, 0, 0);
+        to_copy = push_stringf(scratch, "%.*s%.*s\n", clipboard.size, clipboard.str, line.size, line.str);
+    }
+    else
+    {
+        to_copy = push_stringf(scratch, "%.*s\n", line.size, line.str);
+    }
+    
+    if (to_copy.size > 0){
+        clipboard_post(0, to_copy);
+    }
+}
+
+CUSTOM_COMMAND_SIG(cut_add_to_clip)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    Scratch_Block scratch(app);
+    
+    Range_i64 range = get_view_range(app, view);
+    
+    String_Const_u8 range_buffer = push_buffer_range(app, scratch, buffer, range);
+    delete_range(app);
+    
+    String_Const_u8 to_copy = {};
+    if(clipboard_count(0) != 0)
+    {
+        String_Const_u8 clipboard = push_clipboard_index(scratch, 0, 0);
+        to_copy = push_stringf(scratch, "%.*s%.*s", clipboard.size, clipboard.str, range_buffer.size, range_buffer.str);
+    }
+    else
+    {
+        to_copy = push_stringf(scratch, "%.*s", range_buffer.size, range_buffer.str);
+    }
+    
+    if (to_copy.size > 0){
+        clipboard_post(0, to_copy);
+    }
+}
+
+CUSTOM_COMMAND_SIG(quick_peel_buffer)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    Buffer_ID next_buffer = get_buffer_next(app, buffer, Access_ReadVisible);
+    view_set_buffer(app, view, next_buffer, SetBuffer_DontUpdateTouchList);
+}
+
+CUSTOM_COMMAND_SIG(put_buffer_on_other_view_and_peel)
+{
+    view_buffer_other_panel(app);
+    change_active_panel(app);
+    quick_peel_buffer(app);
+}
+
+CUSTOM_COMMAND_SIG(quick_goto_next_buffer_in_stack)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    Buffer_ID next_buffer = get_buffer_prev(app, buffer, Access_ReadVisible);
+    view_set_buffer(app, view, next_buffer, SetBuffer_DontUpdateTouchList);
+}
+
+CUSTOM_COMMAND_SIG(list_all_type_definitions_current_buffer_lister)
+{
+    String_Const_u8 decls_name = string_u8_litexpr("*decls*");
+    Buffer_ID decls_buffer = get_buffer_by_name(app, decls_name, Access_Always);
+    if (!buffer_exists(app, decls_buffer)){
+        decls_buffer = create_buffer(app, decls_name, BufferCreate_AlwaysNew);
+        buffer_set_setting(app, decls_buffer, BufferSetting_Unimportant, true);
+        buffer_set_setting(app, decls_buffer, BufferSetting_ReadOnly, true);
+        //buffer_set_setting(app, decls_buffer, BufferSetting_WrapLine, false);
+    }
+    else{
+        clear_buffer(app, decls_buffer);
+        buffer_send_end_signal(app, decls_buffer);
+    }
+    
+    Scratch_Block scratch(app);
+    
+    String_Const_u8_Array array = {};
+    array.count = 3;
+    array.vals = push_array(scratch, String_Const_u8, array.count);
+    i32 i = 0;
+    array.vals[i++] = (push_u8_stringf(scratch, "\nstruct"));
+    array.vals[i++] = (push_u8_stringf(scratch, "\nunion "));
+    array.vals[i++] = (push_u8_stringf(scratch, "\nenum "));
+    Assert(i == array.count);
+    
+    View_ID view = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
+    
+    list_all_locations_in_buffer__generic_buffer(app, buffer, array, ListAllLocationsFlag_CaseSensitive|ListAllLocationsFlag_MatchSubstring, decls_buffer, 1);
+    
+    Heap *heap = &global_heap;
+    view = get_active_view(app, Access_Always);
+    view_set_buffer(app, view, decls_buffer, 0);
+    buffer = view_get_buffer(app, view, Access_Always);
+    
+    lock_jump_buffer(app, decls_name);
+    
+    Marker_List *list = get_or_make_list_for_buffer(app, heap, buffer);
+    if (list != 0){
+        Jump_Lister_Result jump = get_jump_index_from_user(app, list, "Definition:");
+        jump_to_jump_lister_result(app, view, list, &jump);
+        try_buffer_kill(app, decls_buffer, view, 0);
+    }
+}
+
+CUSTOM_COMMAND_SIG(interactive_search_type_definition)
+{
+    String_Const_u8 decls_name = string_u8_litexpr("*decls*");
+    Buffer_ID decls_buffer = get_buffer_by_name(app, decls_name, Access_Always);
+    if (!buffer_exists(app, decls_buffer)){
+        decls_buffer = create_buffer(app, decls_name, BufferCreate_AlwaysNew);
+        buffer_set_setting(app, decls_buffer, BufferSetting_Unimportant, true);
+        buffer_set_setting(app, decls_buffer, BufferSetting_ReadOnly, true);
+        //buffer_set_setting(app, decls_buffer, BufferSetting_WrapLine, false);
+    }
+    else{
+        clear_buffer(app, decls_buffer);
+        buffer_send_end_signal(app, decls_buffer);
+    }
+    
+    Scratch_Block scratch(app);
+    String_Const_u8_Array array = {};
+    array.count = 3;
+    array.vals = push_array(scratch, String_Const_u8, array.count);
+    i32 i = 0;
+    array.vals[i++] = (push_u8_stringf(scratch, "\nstruct "));
+    array.vals[i++] = (push_u8_stringf(scratch, "\nunion "));
+    array.vals[i++] = (push_u8_stringf(scratch, "\nenum "));
+    Assert(i == array.count);
+    
+    list_all_locations__generic_buffer_offset(app, array, ListAllLocationsFlag_CaseSensitive|ListAllLocationsFlag_MatchSubstring, decls_buffer, 1);
+    
+    Heap *heap = &global_heap;
+    View_ID view = get_active_view(app, Access_Always);
+    view_set_buffer(app, view, decls_buffer, 0);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
+    
+    lock_jump_buffer(app, decls_name);
+    
+    Marker_List *list = get_or_make_list_for_buffer(app, heap, buffer);
+    if (list != 0){
+        Jump_Lister_Result jump = get_jump_index_from_user(app, list, "Definition:");
+        jump_to_jump_lister_result(app, view, list, &jump);
+        try_buffer_kill(app, decls_buffer, view, 0);
+    }
+}
+
+CUSTOM_COMMAND_SIG(custom_list_all_functions_current_buffer_lister)
+{
+    list_all_functions_current_buffer_lister(app);
+    String_Const_u8 decls_name = string_u8_litexpr("*decls*");
+    Buffer_ID decls_buffer = get_buffer_by_name(app, decls_name, Access_Always);
+    View_ID view = get_active_view(app, Access_Always);
+    try_buffer_kill(app, decls_buffer, view, 0);
+}
+
+CUSTOM_COMMAND_SIG(custom_list_all_functions_all_buffers_lister)
+{
+    list_all_functions_all_buffers_lister(app);
+    String_Const_u8 decls_name = string_u8_litexpr("*decls*");
+    Buffer_ID decls_buffer = get_buffer_by_name(app, decls_name, Access_Always);
+    View_ID view = get_active_view(app, Access_Always);
+    try_buffer_kill(app, decls_buffer, view, 0);
+}
+
+
+
+
+// To Implement
+CUSTOM_COMMAND_SIG(move_token_right)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+    
+    Scratch_Block scratch(app);
+    
+    String_Const_u8 text = push_buffer_range(app, scratch, buffer, token_range);
+    buffer_replace_range(app, buffer, token_range, string_u8_empty);
+    
+    move_right_token_boundary(app);
+    move_left_token_boundary(app);
+    
+    i64 pos = view_get_cursor_pos(app, view);
+    buffer_replace_range(app, buffer, Ii64(pos), text);
+}
+
+CUSTOM_COMMAND_SIG(move_token_left)
+{
+    
+}
+
+CUSTOM_COMMAND_SIG(goto_prev_function)
+{
+    
+}
+
+CUSTOM_COMMAND_SIG(goto_next_function)
+{
+    
+}
+
 function void setup_all_mappings(Mapping *mapping, i64 scopeid)
 {
     MappingScope();
     SelectMapping(mapping);
     SelectMap(scopeid);
     
-    // Navigation Commands
+    // I/J/K/L
+    
     Bind(custom_move_up,                KeyCode_I, KeyCode_Alt);
     Bind(custom_move_down,              KeyCode_K, KeyCode_Alt);
     Bind(custom_move_left,              KeyCode_J, KeyCode_Alt);
     Bind(custom_move_right,             KeyCode_L, KeyCode_Alt);
     
-    Bind(move_left_alpha_numeric_boundary,           KeyCode_J, KeyCode_Control);
-    Bind(move_right_alpha_numeric_boundary,          KeyCode_L, KeyCode_Control);
+    // TODO(Leonardo): Instead of moving to blank line, move "vertically" to next/prev whitespaces 
+    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Control, KeyCode_Shift);
+    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Control, KeyCode_Shift);
+    Bind(move_left_whitespace_boundary,           KeyCode_J, KeyCode_Control, KeyCode_Shift);
+    Bind(move_right_whitespace_boundary,          KeyCode_L, KeyCode_Control, KeyCode_Shift);
+    
     Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Control);
     Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Control);
+    Bind(move_left_alpha_numeric_boundary,           KeyCode_J, KeyCode_Control);
+    Bind(move_right_alpha_numeric_boundary,          KeyCode_L, KeyCode_Control);
     
-    Bind(move_left_whitespace_boundary,    KeyCode_J, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_right_whitespace_boundary,   KeyCode_L, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_up_to_blank_line_end,        KeyCode_I, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_down_to_blank_line_end,      KeyCode_K, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_line_up,           KeyCode_I, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_line_down,         KeyCode_K, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_range_up,           KeyCode_I, KeyCode_Control, KeyCode_Shift);
+    Bind(move_range_down,         KeyCode_K, KeyCode_Control, KeyCode_Shift);
     
-    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Alt, KeyCode_Control);
-    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Alt, KeyCode_Control);
+    Bind(move_token_right, KeyCode_L, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_token_left, KeyCode_J, KeyCode_Alt, KeyCode_Shift);
+    
     Bind(move_to_line_boundary_backward,    KeyCode_J, KeyCode_Alt, KeyCode_Control);
     Bind(move_to_line_boundary_forward,   KeyCode_L, KeyCode_Alt, KeyCode_Control);
+    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Alt, KeyCode_Control);
+    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Alt, KeyCode_Control);
     
-    //Bind(move_left_alpha_numeric_or_camel_boundary,  KeyCode_Left, KeyCode_Alt);
-    //Bind(move_right_alpha_numeric_or_camel_boundary, KeyCode_Right, KeyCode_Alt);
+    // Arrows
+    Bind(goto_prev_function, KeyCode_Up, KeyCode_Alt);
+    Bind(goto_next_function, KeyCode_Down, KeyCode_Alt);
     
-    Bind(goto_beginning_of_file, KeyCode_Home);
-    Bind(goto_end_of_file,       KeyCode_End);
-    
+    Bind(goto_beginning_of_file, KeyCode_Up, KeyCode_Alt, KeyCode_Shift);
+    Bind(goto_end_of_file, KeyCode_Down, KeyCode_Alt, KeyCode_Shift);
     
     // General Purpouse Commands
-    Bind(copy,                        KeyCode_C, KeyCode_Alt);
-    Bind(copy,                        KeyCode_C, KeyCode_Alt, KeyCode_Shift);
-    Bind(paste_and_indent,            KeyCode_V, KeyCode_Alt);
-    Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Alt, KeyCode_Shift);
-    Bind(cut,                         KeyCode_X, KeyCode_Alt);
-    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(change_active_panel,           KeyCode_Semicolon, KeyCode_Alt);
+    Bind(quick_peel_buffer, KeyCode_B, KeyCode_Alt);
+    Bind(quick_goto_next_buffer_in_stack, KeyCode_B, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(interactive_open_or_new,       KeyCode_O, KeyCode_Alt);
+    Bind(open_in_other,                 KeyCode_O, KeyCode_Alt, KeyCode_Control);
+    Bind(put_buffer_on_other_view_and_peel, KeyCode_O, KeyCode_Alt, KeyCode_Shift);
+    
     Bind(redo,                        KeyCode_Y, KeyCode_Alt);
     Bind(undo,                        KeyCode_U, KeyCode_Alt);
     
+    // Buffer commands
+    
+    Bind(copy,                        KeyCode_C, KeyCode_Alt);
+    Bind(paste_and_indent,            KeyCode_V, KeyCode_Alt);
+    Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Alt, KeyCode_Shift);
+    
+    // TODO(Leonardo): Is there something meaningful to do with Ctrl + Shift?
+    Bind(cut,                         KeyCode_X, KeyCode_Alt);
+    Bind(cut_add_to_clip,             KeyCode_X, KeyCode_Alt, KeyCode_Shift);
+    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Control);
+    
+    Bind(set_mark,                    KeyCode_Space, KeyCode_Alt);
+    Bind(cursor_mark_swap,            KeyCode_Space, KeyCode_Control);
+    
     // Line Commands
+    
     Bind(duplicate_line,              KeyCode_H, KeyCode_Alt);
-    Bind(goto_line,                   KeyCode_G, KeyCode_Alt);
+    Bind(duplicate_range,              KeyCode_H, KeyCode_Alt, KeyCode_Shift);
+    
     Bind(delete_line,                 KeyCode_Backspace, KeyCode_Alt, KeyCode_Control);
+    Bind(delete_line_add_to_clip,     KeyCode_Backspace, KeyCode_Alt, KeyCode_Shift);
+    Bind(cut_line,                    KeyCode_Backspace, KeyCode_Shift, KeyCode_Control);
+    
     Bind(delete_next_line,  KeyCode_Delete, KeyCode_Alt, KeyCode_Control);
-    Bind(move_line_up,           KeyCode_I, KeyCode_Control, KeyCode_Shift);
-    Bind(move_line_down,         KeyCode_K, KeyCode_Control, KeyCode_Shift);
     
     // Delete Text Commands
-    Bind(backspace_alpha_numeric_boundary, KeyCode_Backspace, KeyCode_Shift);
-    Bind(delete_alpha_numeric_boundary,    KeyCode_Delete, KeyCode_Shift);
-    Bind(backspace_alpha_numeric_boundary, KeyCode_Backspace, KeyCode_Alt);
-    Bind(delete_alpha_numeric_boundary, KeyCode_Delete, KeyCode_Alt);
-    Bind(delete_to_end_of_line_and_terminate, KeyCode_Semicolon, KeyCode_Alt);
     
-    // Buffer Commands
-    Bind(set_mark,                    KeyCode_Space, KeyCode_Shift);
-    Bind(cursor_mark_swap,            KeyCode_Space, KeyCode_Control);
-    Bind(switch_buffer_interactive, KeyCode_Space, KeyCode_Control);
-    
-    Bind(change_active_panel,           KeyCode_Space, KeyCode_Alt);
-    Bind(quick_swap_buffer,             KeyCode_Space, KeyCode_Alt, KeyCode_Shift);
-    //Bind(close_buffer, KeyCode_B, KeyCode_Alt);
-    Bind(interactive_open_or_new,       KeyCode_O, KeyCode_Alt);
-    Bind(open_in_other,                 KeyCode_O, KeyCode_Alt, KeyCode_Control);
+    Bind(snipe_backward_whitespace_or_token_boundary, KeyCode_Backspace, KeyCode_Alt);
+    Bind(snipe_forward_whitespace_or_token_boundary,  KeyCode_Delete, KeyCode_Alt);
     
     // Search Commands
-    Bind(search,                      KeyCode_F, KeyCode_Alt);
-    Bind(reverse_search,              KeyCode_F, KeyCode_Alt, KeyCode_Shift);
-    Bind(list_all_functions_current_buffer_lister, KeyCode_P, KeyCode_Alt);
-    //Bind(interactive_search_function, KeyCode_P, KeyCode_Alt);
-    Bind(list_all_type_definitions_current_buffer_lister, KeyCode_Q, KeyCode_Alt, KeyCode_Shift);
-    Bind(interactive_search_type_definition, KeyCode_Q, KeyCode_Alt);
-    Bind(list_all_locations,          KeyCode_F, KeyCode_Control, KeyCode_Shift);
-    Bind(list_all_substring_locations_case_insensitive, KeyCode_F, KeyCode_Control);
-    Bind(search_identifier,           KeyCode_T, KeyCode_Control);
-    Bind(list_all_locations_of_identifier, KeyCode_T, KeyCode_Control, KeyCode_Shift);
-    Bind(view_jump_list_with_lister,  KeyCode_Period, KeyCode_Alt);
-    Bind(jump_to_definition_at_cursor, KeyCode_D, KeyCode_Alt);
-    Bind(list_all_locations_of_type_definition, KeyCode_D, KeyCode_Control);
     
-    //Replace Commands
-    Bind(replace_in_range,       KeyCode_Quote, KeyCode_Alt);
-    Bind(replace_in_buffer,      KeyCode_Quote, KeyCode_Alt, KeyCode_Shift);
-    Bind(replace_in_all_buffers, KeyCode_Quote, KeyCode_Alt, KeyCode_Shift, KeyCode_Control);
+    Bind(search,                      KeyCode_S, KeyCode_Alt);
+    Bind(reverse_search,              KeyCode_S, KeyCode_Alt, KeyCode_Shift);
+    Bind(list_all_substring_locations_case_insensitive, KeyCode_S, KeyCode_Control);
+    
+    Bind(custom_list_all_functions_current_buffer_lister, KeyCode_F, KeyCode_Alt);
+    Bind(custom_list_all_functions_all_buffers_lister, KeyCode_F, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(list_all_type_definitions_current_buffer_lister, KeyCode_D, KeyCode_Alt);
+    Bind(interactive_search_type_definition, KeyCode_D, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(goto_line,                   KeyCode_G, KeyCode_Alt, KeyCode_Shift);
+    Bind(jump_to_definition_at_cursor, KeyCode_G, KeyCode_Alt);
     
     Bind(query_replace,               KeyCode_R, KeyCode_Alt);
-    Bind(query_replace_identifier,    KeyCode_R, KeyCode_Alt, KeyCode_Control);
-    Bind(query_replace_selection,     KeyCode_R, KeyCode_Alt, KeyCode_Shift);
-    Bind(query_replace_all_buffers,   KeyCode_R, KeyCode_Alt, KeyCode_Control, KeyCode_Shift);
+    Bind(query_replace_all_buffers,   KeyCode_R, KeyCode_Alt, KeyCode_Shift);
     
-    //Scope Commands
-    Bind(select_prev_scope_absolute, KeyCode_9, KeyCode_Control);
-    Bind(select_next_scope_absolute, KeyCode_0, KeyCode_Control);
-    Bind(select_prev_top_most_scope, KeyCode_9, KeyCode_Alt, KeyCode_Control);
-    Bind(select_next_top_most_scope, KeyCode_0, KeyCode_Alt, KeyCode_Control);
-    //Bind(goto_prev_function, KeyCode_9, KeyCode_Alt);
-    //Bind(goto_next_function, KeyCode_0, KeyCode_Alt);
+    // Misc
     
-    Bind(place_in_scope,             KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
-    Bind(place_line_after_scope_in_scope, KeyCode_RightBracket, KeyCode_Alt);
-    Bind(place_line_in_scope,             KeyCode_LeftBracket, KeyCode_Alt);
-    Bind(place_line_before_scope_in_scope, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Shift);
-    Bind(delete_current_scope_custom,       KeyCode_RightBracket, KeyCode_Control);
+    Bind(exit_4coder, KeyCode_Q, KeyCode_Alt);
     
-    //Build Commands
-    Bind(change_to_build_panel,         KeyCode_Comma, KeyCode_Alt);
-    Bind(build_in_build_panel,          KeyCode_Return, KeyCode_Alt);
-    Bind(close_build_panel,             KeyCode_Return, KeyCode_Alt, KeyCode_Shift);
-    
-    //Misc Commands
-    //Bind(toggle_theme_hot_reload,                 KeyCode_4, KeyCode_Alt);
-    //Bind(pick_color, KeyCode_W, KeyCode_Alt);
-    
-    Bind(goto_next_jump,                KeyCode_Equal, KeyCode_Alt);
-    Bind(goto_prev_jump,                KeyCode_Minus, KeyCode_Alt);
-    Bind(goto_first_jump,               KeyCode_Minus, KeyCode_Alt, KeyCode_Shift);
-    
-    Bind(comment_line_toggle,        KeyCode_ForwardSlash, KeyCode_Alt);
-    Bind(word_complete_drop_down,    KeyCode_Tab, KeyCode_Shift);
-    Bind(if0_off,                KeyCode_0, KeyCode_Alt);
+    Bind(goto_next_jump,                KeyCode_N, KeyCode_Alt);
+    Bind(goto_prev_jump,                KeyCode_N, KeyCode_Alt, KeyCode_Shift);
     
     Bind(write_todo,                 KeyCode_1, KeyCode_Alt);
     Bind(write_note,                 KeyCode_2, KeyCode_Alt);
@@ -793,8 +1127,55 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     
     Bind(command_lister,                KeyCode_Z, KeyCode_Alt);
     Bind(snippet_lister,              KeyCode_Tick, KeyCode_Alt);
-    Bind(reopen,                      KeyCode_O, KeyCode_Control);
     
+    Bind(view_jump_list_with_lister_and_close_jump_list,  KeyCode_Period, KeyCode_Alt);
+    
+    Bind(save_all_dirty_and_build_in_build_panel,          KeyCode_Return, KeyCode_Alt);
+    Bind(close_build_panel,             KeyCode_Return, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(comment_line_toggle,        KeyCode_ForwardSlash, KeyCode_Alt);
+    Bind(if0_off,                KeyCode_0, KeyCode_Alt);
+    Bind(comment_block, KeyCode_0, KeyCode_Shift, KeyCode_Alt);
+    
+    Bind(delete_to_end_of_line_and_terminate, KeyCode_Quote, KeyCode_Alt);
+    Bind(delete_from_beginning_of_line, KeyCode_Quote, KeyCode_Alt, KeyCode_Shift);
+    
+    // Scope Commands
+    
+    Bind(select_next_scope_absolute, KeyCode_RightBracket, KeyCode_Control);
+    Bind(select_prev_scope_absolute, KeyCode_LeftBracket, KeyCode_Control);
+    
+    Bind(select_prev_top_most_scope, KeyCode_LeftBracket, KeyCode_Control, KeyCode_Shift);
+    Bind(select_next_top_most_scope, KeyCode_RightBracket, KeyCode_Control, KeyCode_Shift);
+    
+    Bind(place_line_in_scope,               KeyCode_LeftBracket, KeyCode_Alt);
+    Bind(place_line_in_scope_and_semicolon, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Control);
+    
+    Bind(place_line_before_scope_in_scope, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
+    Bind(place_line_after_scope_in_scope, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Shift);
+    
+    // NOTE(Leonardo): currently unused commands
+#if 0
+    Bind(place_in_scope,             KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
+    Bind(delete_current_scope_custom,       KeyCode_RightBracket, KeyCode_Control);
+    
+    Bind(change_to_build_panel,         KeyCode_Comma, KeyCode_Alt);
+    Bind(query_replace_selection,     KeyCode_R, KeyCode_Alt, KeyCode_Shift);
+    Bind(search_identifier,           KeyCode_T, KeyCode_Control);
+    Bind(list_all_locations_of_identifier, KeyCode_T, KeyCode_Control, KeyCode_Shift);
+    Bind(replace_in_range,       KeyCode_Quote, KeyCode_Alt);
+    Bind(query_replace_identifier,    KeyCode_R, KeyCode_Alt, KeyCode_Control);
+    Bind(replace_in_buffer,      KeyCode_Quote, KeyCode_Alt, KeyCode_Shift);
+    Bind(replace_in_all_buffers, KeyCode_Quote, KeyCode_Alt, KeyCode_Shift, KeyCode_Control);
+    Bind(word_complete_drop_down,    KeyCode_Tab, KeyCode_Shift);
+    Bind(reopen,                      KeyCode_O, KeyCode_Control);
+#endif
+    
+    //Bind(list_all_locations_of_type_definition, KeyCode_D, KeyCode_Control);
+    
+    //Misc Commands
+    //Bind(toggle_theme_hot_reload,                 KeyCode_4, KeyCode_Alt);
+    //Bind(pick_color, KeyCode_W, KeyCode_Alt);
     
     //Bind(kill_buffer,                 KeyCode_K, KeyCode_Control, KeyCode_Shift);
     
@@ -807,8 +1188,6 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     //Bind(write_zero_struct,          KeyCode_0, KeyCode_Control);
     //Bind(open_long_braces_semicolon, KeyCode_LeftBracket, KeyCode_Control, KeyCode_Shift);
     
-    //Bind(snipe_backward_whitespace_or_token_boundary, KeyCode_Backspace, KeyCode_Alt);
-    //Bind(snipe_forward_whitespace_or_token_boundary,  KeyCode_Delete, KeyCode_Alt);
     //Bind(center_view,                 KeyCode_E, KeyCode_Control);
     //Bind(left_adjust_view,            KeyCode_E, KeyCode_Control, KeyCode_Shift);
 }

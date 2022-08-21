@@ -457,7 +457,7 @@ view_set_cursor_and_scroll(Thread_Context *tctx, Models *models, View *view, i64
 ////////////////////////////////
 
 internal void
-view_set_file(Thread_Context *tctx, Models *models, View *view, Editing_File *file){
+view_set_file(Thread_Context *tctx, Models *models, View *view, Editing_File *file, b32 update_touch_list){
     Assert(file != 0);
     
     Editing_File *old_file = view->file;
@@ -471,10 +471,13 @@ view_set_file(Thread_Context *tctx, Models *models, View *view, Editing_File *fi
     }
     
     if (old_file != 0){
-        file_touch(&models->working_set, old_file);
         file_edit_positions_push(old_file, view_get_edit_pos(view));
     }
     
+    if(update_touch_list)
+{
+    file_touch(&models->working_set, file);
+}
     view->file = file;
     
     File_Edit_Positions edit_pos = file_edit_positions_pop(file);
@@ -593,7 +596,7 @@ view_event_context_base__inner(Coroutine *coroutine){
 function void
 view_init(Thread_Context *tctx, Models *models, View *view, Editing_File *initial_buffer,
           Custom_Command_Function *event_context_base){
-    view_set_file(tctx, models, view, initial_buffer);
+    view_set_file(tctx, models, view, initial_buffer, true);
     
     view->node_arena = make_arena_system();
     

@@ -9,6 +9,7 @@
 #define custom_enqueue_virtual_event_sig() b32 custom_enqueue_virtual_event(Application_Links* app, Input_Event* event)
 #define custom_get_buffer_count_sig() i32 custom_get_buffer_count(Application_Links* app)
 #define custom_get_buffer_next_sig() Buffer_ID custom_get_buffer_next(Application_Links* app, Buffer_ID buffer_id, Access_Flag access)
+#define custom_get_buffer_prev_sig() Buffer_ID custom_get_buffer_prev(Application_Links* app, Buffer_ID buffer_id, Access_Flag access)
 #define custom_get_buffer_by_name_sig() Buffer_ID custom_get_buffer_by_name(Application_Links* app, String_Const_u8 name, Access_Flag access)
 #define custom_get_buffer_by_file_name_sig() Buffer_ID custom_get_buffer_by_file_name(Application_Links* app, String_Const_u8 file_name, Access_Flag access)
 #define custom_buffer_read_range_sig() b32 custom_buffer_read_range(Application_Links* app, Buffer_ID buffer_id, Range_i64 range, u8* out)
@@ -368,6 +369,7 @@ custom_child_process_get_state_type *child_process_get_state;
 custom_enqueue_virtual_event_type *enqueue_virtual_event;
 custom_get_buffer_count_type *get_buffer_count;
 custom_get_buffer_next_type *get_buffer_next;
+custom_get_buffer_next_type *get_buffer_prev;
 custom_get_buffer_by_name_type *get_buffer_by_name;
 custom_get_buffer_by_file_name_type *get_buffer_by_file_name;
 custom_buffer_read_range_type *buffer_read_range;
@@ -549,6 +551,7 @@ internal Process_State child_process_get_state(Application_Links* app, Child_Pro
 internal b32 enqueue_virtual_event(Application_Links* app, Input_Event* event);
 internal i32 get_buffer_count(Application_Links* app);
 internal Buffer_ID get_buffer_next(Application_Links* app, Buffer_ID buffer_id, Access_Flag access);
+internal Buffer_ID get_buffer_prev(Application_Links* app, Buffer_ID buffer_id, Access_Flag access);
 internal Buffer_ID get_buffer_by_name(Application_Links* app, String_Const_u8 name, Access_Flag access);
 internal Buffer_ID get_buffer_by_file_name(Application_Links* app, String_Const_u8 file_name, Access_Flag access);
 internal b32 buffer_read_range(Application_Links* app, Buffer_ID buffer_id, Range_i64 range, u8* out);
@@ -730,6 +733,7 @@ global custom_child_process_get_state_type *child_process_get_state = 0;
 global custom_enqueue_virtual_event_type *enqueue_virtual_event = 0;
 global custom_get_buffer_count_type *get_buffer_count = 0;
 global custom_get_buffer_next_type *get_buffer_next = 0;
+global custom_get_buffer_next_type *get_buffer_prev = 0;
 global custom_get_buffer_by_name_type *get_buffer_by_name = 0;
 global custom_get_buffer_by_file_name_type *get_buffer_by_file_name = 0;
 global custom_buffer_read_range_type *buffer_read_range = 0;
