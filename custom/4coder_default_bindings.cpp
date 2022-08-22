@@ -611,6 +611,7 @@ CUSTOM_COMMAND_SIG(pick_color)
             call_after_ctx_shutdown(app, view, disp_result.func);
             break;
         }
+        
         if (disp_result.code == FallbackDispatch_Unhandled){
             leave_current_input_unhandled(app);
         }
@@ -655,13 +656,18 @@ CUSTOM_COMMAND_SIG(view_jump_list_with_lister_and_close_jump_list)
     }
 }
 
+CUSTOM_COMMAND_SIG(copy_line)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    i64 line_number = get_line_number_from_pos(app, buffer, view_get_cursor_pos(app, view));
+    Range_i64 range = get_line_pos_range(app, buffer, line_number);
+    clipboard_post_buffer_range(app, 0, buffer, range);
+}
+
 CUSTOM_COMMAND_SIG(cut_line)
 {
-    seek_beginning_of_line(app);
-    set_mark(app);
-    seek_end_of_line(app);
-    copy(app);
-    
+    copy_line(app);
     delete_line(app);
 }
 
@@ -847,11 +853,10 @@ CUSTOM_COMMAND_SIG(quick_peel_buffer)
     view_set_buffer(app, view, next_buffer, SetBuffer_DontUpdateTouchList);
 }
 
-CUSTOM_COMMAND_SIG(put_buffer_on_other_view_and_peel)
+CUSTOM_COMMAND_SIG(view_buffer_other_panel_switch_back)
 {
     view_buffer_other_panel(app);
     change_active_panel(app);
-    quick_peel_buffer(app);
 }
 
 CUSTOM_COMMAND_SIG(quick_goto_next_buffer_in_stack)
@@ -971,39 +976,209 @@ CUSTOM_COMMAND_SIG(custom_list_all_functions_all_buffers_lister)
 
 
 
-// To Implement
 CUSTOM_COMMAND_SIG(move_token_right)
 {
+    Scratch_Block scratch(app);
+    
     View_ID view = get_active_view(app, Access_ReadVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
     
     Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+    u8 before = buffer_get_char(app, buffer, token_range.start - 1);
+    u8 after = buffer_get_char(app, buffer, token_range.end);
     
-    Scratch_Block scratch(app);
+    Range_i64 replace_range = token_range;
+    if(before == ' ')
+    {
+        replace_range.start -= 1;
+    }
+    
+    if(after == ' ')
+    {
+        replace_range.end += 1;
+    }
     
     String_Const_u8 text = push_buffer_range(app, scratch, buffer, token_range);
-    buffer_replace_range(app, buffer, token_range, string_u8_empty);
+    buffer_replace_range(app, buffer, replace_range, string_u8_empty);
     
+    move_right_token_boundary(app);
     move_right_token_boundary(app);
     move_left_token_boundary(app);
     
     i64 pos = view_get_cursor_pos(app, view);
     buffer_replace_range(app, buffer, Ii64(pos), text);
+    
+    Range_i64 left = left_enclose_token_pos(app, buffer, pos);
+    Range_i64 right = right_enclose_token_pos(app, buffer, pos);
+    
+    i64 length = token_range.end - token_range.start;
+    String_Const_u8 str = push_u8_stringf(scratch, " ");
+    if(left.start != left.end)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos), str);
+        view_set_cursor_and_preferred_x(app, view, seek_pos(pos + 1));
+    }
+    
+    if(right.end != pos + length)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos + length), str);
+    }
 }
 
 CUSTOM_COMMAND_SIG(move_token_left)
 {
+    Scratch_Block scratch(app);
     
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+    u8 before = buffer_get_char(app, buffer, token_range.start - 1);
+    u8 after = buffer_get_char(app, buffer, token_range.end);
+    
+    Range_i64 replace_range = token_range;
+    if(before == ' ')
+    {
+        replace_range.start -= 1;
+    }
+    
+    if(after == ' ')
+    {
+        replace_range.end += 1;
+    }
+    
+    String_Const_u8 text = push_buffer_range(app, scratch, buffer, token_range);
+    buffer_replace_range(app, buffer, replace_range, string_u8_empty);
+    
+    move_left_token_boundary(app);
+    move_left_token_boundary(app);
+    move_right_token_boundary(app);
+    
+    i64 pos = view_get_cursor_pos(app, view);
+    buffer_replace_range(app, buffer, Ii64(pos), text);
+    
+    Range_i64 left = left_enclose_token_pos(app, buffer, pos);
+    Range_i64 right = right_enclose_token_pos(app, buffer, pos);
+    
+    i64 length = token_range.end - token_range.start;
+    String_Const_u8 str = push_u8_stringf(scratch, " ");
+    if(left.start != left.end)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos), str);
+        view_set_cursor_and_preferred_x(app, view, seek_pos(pos + 1));
+    }
+    
+    if(right.end != pos + length)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos + length), str);
+    }
+}
+
+
+CUSTOM_COMMAND_SIG(move_token_one_right)
+{
+    Scratch_Block scratch(app);
+    
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+    u8 before = buffer_get_char(app, buffer, token_range.start - 1);
+    u8 after = buffer_get_char(app, buffer, token_range.end);
+    
+    Range_i64 replace_range = token_range;
+    if(before == ' ')
+    {
+        replace_range.start -= 1;
+    }
+    
+    if(after == ' ')
+    {
+        replace_range.end += 1;
+    }
+    
+    String_Const_u8 text = push_buffer_range(app, scratch, buffer, token_range);
+    buffer_replace_range(app, buffer, replace_range, string_u8_empty);
+    
+    move_right_token_boundary(app);
+    move_right(app);
+    
+    i64 pos = view_get_cursor_pos(app, view);
+    buffer_replace_range(app, buffer, Ii64(pos), text);
+    
+    Range_i64 left = left_enclose_token_pos(app, buffer, pos);
+    Range_i64 right = right_enclose_token_pos(app, buffer, pos);
+    
+    i64 length = token_range.end - token_range.start;
+    String_Const_u8 str = push_u8_stringf(scratch, " ");
+    if(left.start != left.end)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos), str);
+        view_set_cursor_and_preferred_x(app, view, seek_pos(pos + 1));
+    }
+    
+    if(right.end != pos + length)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos + length), str);
+    }
+}
+
+CUSTOM_COMMAND_SIG(move_token_one_left)
+{
+    Scratch_Block scratch(app);
+    
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+    u8 before = buffer_get_char(app, buffer, token_range.start - 1);
+    u8 after = buffer_get_char(app, buffer, token_range.end);
+    
+    Range_i64 replace_range = token_range;
+    if(before == ' ')
+    {
+        replace_range.start -= 1;
+    }
+    
+    if(after == ' ')
+    {
+        replace_range.end += 1;
+    }
+    
+    String_Const_u8 text = push_buffer_range(app, scratch, buffer, token_range);
+    buffer_replace_range(app, buffer, replace_range, string_u8_empty);
+    
+    move_left_token_boundary(app);
+    move_left(app);
+    
+    i64 pos = view_get_cursor_pos(app, view);
+    buffer_replace_range(app, buffer, Ii64(pos), text);
+    
+    Range_i64 left = left_enclose_token_pos(app, buffer, pos);
+    Range_i64 right = right_enclose_token_pos(app, buffer, pos);
+    
+    i64 length = token_range.end - token_range.start;
+    String_Const_u8 str = push_u8_stringf(scratch, " ");
+    if(left.start != left.end)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos), str);
+        view_set_cursor_and_preferred_x(app, view, seek_pos(pos + 1));
+    }
+    
+    if(right.end != pos + length)
+    {
+        buffer_replace_range(app, buffer, Ii64(pos + length), str);
+    }
 }
 
 CUSTOM_COMMAND_SIG(goto_prev_function)
 {
-    
+    select_prev_top_most_scope(app);
 }
 
 CUSTOM_COMMAND_SIG(goto_next_function)
 {
-    
+    select_next_top_most_scope(app);
 }
 
 function void setup_all_mappings(Mapping *mapping, i64 scopeid)
@@ -1019,29 +1194,28 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(custom_move_left,              KeyCode_J, KeyCode_Alt);
     Bind(custom_move_right,             KeyCode_L, KeyCode_Alt);
     
-    // TODO(Leonardo): Instead of moving to blank line, move "vertically" to next/prev whitespaces 
-    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Control, KeyCode_Shift);
-    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Control, KeyCode_Shift);
-    Bind(move_left_whitespace_boundary,           KeyCode_J, KeyCode_Control, KeyCode_Shift);
-    Bind(move_right_whitespace_boundary,          KeyCode_L, KeyCode_Control, KeyCode_Shift);
+    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_to_line_boundary_backward,    KeyCode_J, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_to_line_boundary_forward,   KeyCode_L, KeyCode_Alt, KeyCode_Shift);
     
     Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Control);
     Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Control);
     Bind(move_left_alpha_numeric_boundary,           KeyCode_J, KeyCode_Control);
     Bind(move_right_alpha_numeric_boundary,          KeyCode_L, KeyCode_Control);
     
-    Bind(move_line_up,           KeyCode_I, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_line_down,         KeyCode_K, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_range_up,           KeyCode_I, KeyCode_Control, KeyCode_Shift);
-    Bind(move_range_down,         KeyCode_K, KeyCode_Control, KeyCode_Shift);
+    Bind(select_prev_top_most_scope,                  KeyCode_I, KeyCode_Alt, KeyCode_Control);
+    Bind(select_next_top_most_scope,                KeyCode_K, KeyCode_Alt, KeyCode_Control);
+    Bind(move_left_whitespace_boundary,           KeyCode_J, KeyCode_Alt, KeyCode_Control);
+    Bind(move_right_whitespace_boundary,          KeyCode_L, KeyCode_Alt, KeyCode_Control);
     
-    Bind(move_token_right, KeyCode_L, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_token_left, KeyCode_J, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_line_up,           KeyCode_I, KeyCode_Control, KeyCode_Shift);
+    Bind(move_line_down,         KeyCode_K,KeyCode_Control,KeyCode_Shift);
+    Bind(move_token_right, KeyCode_L, KeyCode_Control, KeyCode_Shift);
+    Bind(move_token_left, KeyCode_J, KeyCode_Control, KeyCode_Shift);
     
-    Bind(move_to_line_boundary_backward,    KeyCode_J, KeyCode_Alt, KeyCode_Control);
-    Bind(move_to_line_boundary_forward,   KeyCode_L, KeyCode_Alt, KeyCode_Control);
-    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Alt, KeyCode_Control);
-    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Alt, KeyCode_Control);
+    Bind(move_token_one_right, KeyCode_L, KeyCode_Alt, KeyCode_Control, KeyCode_Shift);
+    Bind(move_token_one_left, KeyCode_J, KeyCode_Alt, KeyCode_Control, KeyCode_Shift);
     
     // Arrows
     Bind(goto_prev_function, KeyCode_Up, KeyCode_Alt);
@@ -1050,43 +1224,46 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(goto_beginning_of_file, KeyCode_Up, KeyCode_Alt, KeyCode_Shift);
     Bind(goto_end_of_file, KeyCode_Down, KeyCode_Alt, KeyCode_Shift);
     
+    Bind(move_range_up,          KeyCode_Up, KeyCode_Shift, KeyCode_Control);
+    Bind(move_range_down,         KeyCode_Down, KeyCode_Shift, KeyCode_Control);
+    
     // General Purpouse Commands
     
     Bind(change_active_panel,           KeyCode_Semicolon, KeyCode_Alt);
+    Bind(view_buffer_other_panel_switch_back, KeyCode_Semicolon, KeyCode_Alt, KeyCode_Shift);
+    
     Bind(quick_peel_buffer, KeyCode_B, KeyCode_Alt);
     Bind(quick_goto_next_buffer_in_stack, KeyCode_B, KeyCode_Alt, KeyCode_Shift);
     
     Bind(interactive_open_or_new,       KeyCode_O, KeyCode_Alt);
     Bind(open_in_other,                 KeyCode_O, KeyCode_Alt, KeyCode_Control);
-    Bind(put_buffer_on_other_view_and_peel, KeyCode_O, KeyCode_Alt, KeyCode_Shift);
     
     Bind(redo,                        KeyCode_Y, KeyCode_Alt);
     Bind(undo,                        KeyCode_U, KeyCode_Alt);
     
-    // Buffer commands
-    
-    Bind(copy,                        KeyCode_C, KeyCode_Alt);
-    Bind(paste_and_indent,            KeyCode_V, KeyCode_Alt);
-    Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Alt, KeyCode_Shift);
-    
-    // TODO(Leonardo): Is there something meaningful to do with Ctrl + Shift?
-    Bind(cut,                         KeyCode_X, KeyCode_Alt);
-    Bind(cut_add_to_clip,             KeyCode_X, KeyCode_Alt, KeyCode_Shift);
-    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Control);
-    
     Bind(set_mark,                    KeyCode_Space, KeyCode_Alt);
     Bind(cursor_mark_swap,            KeyCode_Space, KeyCode_Control);
     
-    // Line Commands
+    // copy and paste
+    
+    Bind(copy,                        KeyCode_C, KeyCode_Alt);
+    Bind(copy_line,                   KeyCode_C, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(paste_and_indent,            KeyCode_V, KeyCode_Alt);
+    Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Shift);
+    Bind(cut,                         KeyCode_X, KeyCode_Alt);
+    Bind(cut_add_to_clip,             KeyCode_X, KeyCode_Control);
+    Bind(delete_line_add_to_clip,     KeyCode_X, KeyCode_Alt, KeyCode_Control);
     
     Bind(duplicate_line,              KeyCode_H, KeyCode_Alt);
     Bind(duplicate_range,              KeyCode_H, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(delete_line,                 KeyCode_Backspace, KeyCode_Alt, KeyCode_Control);
-    Bind(delete_line_add_to_clip,     KeyCode_Backspace, KeyCode_Alt, KeyCode_Shift);
-    Bind(cut_line,                    KeyCode_Backspace, KeyCode_Shift, KeyCode_Control);
+    Bind(delete_line,                 KeyCode_Backspace, KeyCode_Alt, KeyCode_Shift);
+    Bind(cut_line,                    KeyCode_Backspace, KeyCode_Alt, KeyCode_Control);
     
-    Bind(delete_next_line,  KeyCode_Delete, KeyCode_Alt, KeyCode_Control);
+    Bind(delete_next_line,            KeyCode_Delete, KeyCode_Alt, KeyCode_Control);
     
     // Delete Text Commands
     
@@ -1097,7 +1274,7 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     
     Bind(search,                      KeyCode_S, KeyCode_Alt);
     Bind(reverse_search,              KeyCode_S, KeyCode_Alt, KeyCode_Shift);
-    Bind(list_all_substring_locations_case_insensitive, KeyCode_S, KeyCode_Control);
+    Bind(list_all_substring_locations_case_insensitive, KeyCode_S, KeyCode_Alt, KeyCode_Control);
     
     Bind(custom_list_all_functions_current_buffer_lister, KeyCode_F, KeyCode_Alt);
     Bind(custom_list_all_functions_all_buffers_lister, KeyCode_F, KeyCode_Alt, KeyCode_Shift);
@@ -1109,7 +1286,8 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(jump_to_definition_at_cursor, KeyCode_G, KeyCode_Alt);
     
     Bind(query_replace,               KeyCode_R, KeyCode_Alt);
-    Bind(query_replace_all_buffers,   KeyCode_R, KeyCode_Alt, KeyCode_Shift);
+    Bind(replace_in_range,            KeyCode_R, KeyCode_Alt, KeyCode_Shift);
+    Bind(query_replace_all_buffers,   KeyCode_R, KeyCode_Alt, KeyCode_Control);
     
     // Misc
     
@@ -1126,9 +1304,9 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(keyboard_macro_replay,           KeyCode_M, KeyCode_Alt, KeyCode_Shift);
     
     Bind(command_lister,                KeyCode_Z, KeyCode_Alt);
-    Bind(snippet_lister,              KeyCode_Tick, KeyCode_Alt);
+    Bind(snippet_lister,              KeyCode_Period, KeyCode_Alt);
     
-    Bind(view_jump_list_with_lister_and_close_jump_list,  KeyCode_Period, KeyCode_Alt);
+    //Bind(view_jump_list_with_lister_and_close_jump_list,  KeyCode_Period, KeyCode_Alt);
     
     Bind(save_all_dirty_and_build_in_build_panel,          KeyCode_Return, KeyCode_Alt);
     Bind(close_build_panel,             KeyCode_Return, KeyCode_Alt, KeyCode_Shift);
@@ -1142,17 +1320,17 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     
     // Scope Commands
     
-    Bind(select_next_scope_absolute, KeyCode_RightBracket, KeyCode_Control);
-    Bind(select_prev_scope_absolute, KeyCode_LeftBracket, KeyCode_Control);
-    
-    Bind(select_prev_top_most_scope, KeyCode_LeftBracket, KeyCode_Control, KeyCode_Shift);
-    Bind(select_next_top_most_scope, KeyCode_RightBracket, KeyCode_Control, KeyCode_Shift);
-    
     Bind(place_line_in_scope,               KeyCode_LeftBracket, KeyCode_Alt);
-    Bind(place_line_in_scope_and_semicolon, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Control);
+    Bind(place_line_in_scope_and_semicolon, KeyCode_RightBracket, KeyCode_Alt);
     
     Bind(place_line_before_scope_in_scope, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
     Bind(place_line_after_scope_in_scope, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(select_next_scope_absolute, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Control);
+    Bind(select_prev_scope_absolute, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Control);
+    
+    Bind(select_prev_top_most_scope, KeyCode_LeftBracket, KeyCode_Control);
+    Bind(select_next_top_most_scope, KeyCode_RightBracket, KeyCode_Control);
     
     // NOTE(Leonardo): currently unused commands
 #if 0

@@ -715,12 +715,12 @@ run_lister(Application_Links *app, Lister *lister){
                 call_after_ctx_shutdown(app, view, disp_result.func);
                 break;
             }
-            if (disp_result.code == FallbackDispatch_Unhandled){
                 leave_current_input_unhandled(app);
-            }
-            else{
-                lister_call_refresh_handler(app, lister);
-            }
+            //if (disp_result.code == FallbackDispatch_Unhandled){
+            //}
+            //else{
+                //lister_call_refresh_handler(app, lister);
+            //}
         }
     }
     

@@ -820,12 +820,12 @@ get_pos_range_from_line_range(Application_Links *app, Buffer_ID buffer, Range_i6
 function Range_i64
 enclose_boundary(Application_Links *app, Buffer_ID buffer, Range_i64 range,
                  Boundary_Function *func){
-    i64 new_min       = func(app, buffer, Side_Min, Scan_Backward, range.min + 1);
-    i64 new_min_check = func(app, buffer, Side_Max, Scan_Backward, range.min + 1);
+    i64 new_min       = func(app, buffer, Side_Min, Scan_Backward, range.min);
+    i64 new_min_check = func(app, buffer, Side_Max, Scan_Backward, range.min);
     if (new_min_check <= new_min && new_min < range.min){
         range.min = new_min;
     }
-    i64 new_max       = func(app, buffer, Side_Max, Scan_Forward, range.max - 1);
+    i64 new_max       = func(app, buffer, Side_Max, Scan_Forward, range.max);
     i64 new_max_check = func(app, buffer, Side_Min, Scan_Forward, range.max);
     if (new_max_check >= new_max && new_max > range.max){
         range.max = new_max;
@@ -836,8 +836,8 @@ enclose_boundary(Application_Links *app, Buffer_ID buffer, Range_i64 range,
 function Range_i64
 left_enclose_boundary(Application_Links *app, Buffer_ID buffer, Range_i64 range,
                       Boundary_Function *func){
-    i64 new_min       = func(app, buffer, Side_Min, Scan_Backward, range.min + 1);
-    i64 new_min_check = func(app, buffer, Side_Max, Scan_Backward, range.min + 1);
+    i64 new_min       = func(app, buffer, Side_Min, Scan_Backward, range.min);
+    i64 new_min_check = func(app, buffer, Side_Max, Scan_Backward, range.min);
     if (new_min_check <= new_min && new_min < range.min){
         range.min = new_min;
     }
@@ -847,8 +847,8 @@ left_enclose_boundary(Application_Links *app, Buffer_ID buffer, Range_i64 range,
 function Range_i64
 right_enclose_boundary(Application_Links *app, Buffer_ID buffer, Range_i64 range,
                        Boundary_Function *func){
-    i64 new_max       = func(app, buffer, Side_Max, Scan_Forward, range.max - 1);
-    i64 new_max_check = func(app, buffer, Side_Min, Scan_Forward, range.max - 1);
+    i64 new_max       = func(app, buffer, Side_Max, Scan_Forward, range.max);
+    i64 new_max_check = func(app, buffer, Side_Min, Scan_Forward, range.max);
     if (new_max_check >= new_max && new_max > range.max){
         range.max = new_max;
     }
@@ -862,6 +862,16 @@ enclose_non_whitespace(Application_Links *app, Buffer_ID buffer, Range_i64 range
 function Range_i64
 enclose_pos_non_whitespace(Application_Links *app, Buffer_ID buffer, i64 pos){
     return(enclose_boundary(app, buffer, Ii64(pos), boundary_non_whitespace));
+}
+
+function Range_i64
+right_enclose_token_pos(Application_Links *app, Buffer_ID buffer, i64 pos){
+    return(right_enclose_boundary(app, buffer, Ii64(pos), boundary_token));
+}
+
+function Range_i64
+left_enclose_token_pos(Application_Links *app, Buffer_ID buffer, i64 pos){
+    return(left_enclose_boundary(app, buffer, Ii64(pos), boundary_token));
 }
 
 function Range_i64
@@ -1385,20 +1395,20 @@ clear_buffer(Application_Links *app, Buffer_ID buffer){
 function String_Match_List
 find_all_matches_buffer(Application_Links *app, Buffer_ID buffer, Arena *arena, String_Const_u8_Array match_patterns, String_Match_Flag must_have_flags, String_Match_Flag must_not_have_flags){
     String_Match_List result = {};
-        for (i32 i = 0; i < match_patterns.count; i += 1){
-            Range_i64 range = buffer_range(app, buffer);
-            String_Match_List pattern_matches = buffer_find_all_matches(app, arena, buffer, i, range, match_patterns.vals[i],
-                                                                        &character_predicate_alpha_numeric_underscore_utf8, Scan_Forward);
-            string_match_list_filter_flags(&pattern_matches, must_have_flags, must_not_have_flags);
-            if (pattern_matches.count > 0){
-                if (result.count == 0){
-                     result = pattern_matches;
-                }
-                else{
-                     result = string_match_list_merge_front_to_back(&result, &pattern_matches);
-                }
+    for (i32 i = 0; i < match_patterns.count; i += 1){
+        Range_i64 range = buffer_range(app, buffer);
+        String_Match_List pattern_matches = buffer_find_all_matches(app, arena, buffer, i, range, match_patterns.vals[i],
+                                                                    &character_predicate_alpha_numeric_underscore_utf8, Scan_Forward);
+        string_match_list_filter_flags(&pattern_matches, must_have_flags, must_not_have_flags);
+        if (pattern_matches.count > 0){
+            if (result.count == 0){
+                result = pattern_matches;
+            }
+            else{
+                result = string_match_list_merge_front_to_back(&result, &pattern_matches);
             }
         }
+    }
     return(result);
 }
 
