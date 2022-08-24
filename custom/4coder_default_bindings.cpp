@@ -207,11 +207,13 @@ query_replace_all_buffers__(Application_Links *app, String_Const_u8 replace_str,
 CUSTOM_COMMAND_SIG(query_replace_in_all_buffers)
 CUSTOM_DOC("Queries the user for two strings, and incrementally replaces every occurence of the first string with the second string in all loaded buffers.")
 {
+    
     View_ID view = get_active_view(app, Access_ReadWriteVisible);
     Buffer_ID activeBuffer = view_get_buffer(app, view, Access_ReadWriteVisible);
     i64 mark_pos = view_get_mark_pos(app, view);
     i64 cursor_pos = view_get_cursor_pos(app, view);
     
+    Query_Bar_Group group(app);
     Query_Bar replace = {};
     u8 replace_space[1024];
     replace.prompt = string_u8_litexpr("Interactive Replace All: ");
@@ -220,12 +222,12 @@ CUSTOM_DOC("Queries the user for two strings, and incrementally replaces every o
     if (query_user_string(app, &replace)){
         if (replace.string.size > 0){
             query_replace_all_buffers__(app, replace.string, activeBuffer);
+            
+            view_set_buffer(app, view, activeBuffer, 0);
+            view_set_cursor_and_preferred_x(app, view, seek_pos(cursor_pos));
+            view_set_mark(app, view, seek_pos(mark_pos));
         }
     }
-    
-    view_set_buffer(app, view, activeBuffer, 0);
-    view_set_cursor_and_preferred_x(app, view, seek_pos(cursor_pos));
-    view_set_mark(app, view, seek_pos(mark_pos));
 }
 
 CUSTOM_COMMAND_SIG(custom_move_up)
@@ -803,7 +805,7 @@ CUSTOM_COMMAND_SIG(duplicate_range)
         Scratch_Block scratch(app);
         Range_i64 range = get_view_range(app, view);
         String_Const_u8 text = push_buffer_range(app, scratch, buffer, range);
-        text = push_u8_stringf(scratch, "%.*s\n", string_expand(text));
+        text = push_u8_stringf(scratch, "%.*s", string_expand(text));
         
         i64 pos = mark_pos;
         if(cursor_pos < mark_pos)
@@ -816,7 +818,7 @@ CUSTOM_COMMAND_SIG(duplicate_range)
         if(mark_pos < cursor_pos)
         {
             view_set_mark(app, view, seek_pos(pos));
-            view_set_cursor_and_preferred_x(app, view, seek_pos(pos + (i32)text.size - 1));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(pos + (i32)text.size));
         }
         else
         {
@@ -1125,15 +1127,22 @@ CUSTOM_COMMAND_SIG(goto_next_function)
     select_next_top_most_scope(app);
 }
 
-CUSTOM_COMMAND_SIG(scan_prev_brace)
+CUSTOM_COMMAND_SIG(scan_prev_brace_or_open_paren)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
     i64 pos = view_get_cursor_pos(app, view);
-    i64 new_pos;
-    String_Const_u8 str = string_u8_litexpr("{");
-    seek_string_insensitive_backward(app, buffer, pos, 0, str, &new_pos);
     
+    i64 brace_pos;
+    i64 parent_pos;
+    
+    String_Const_u8 str = string_u8_litexpr("{");
+    seek_string_insensitive_backward(app, buffer, pos, 0, str, &brace_pos);
+    
+    str = string_u8_litexpr("(");
+    seek_string_insensitive_backward(app, buffer, pos, 0, str, &parent_pos);
+    
+    i64 new_pos = Max(brace_pos, parent_pos);
     b32 found = (new_pos < buffer_get_size(app, buffer) && new_pos > 0);
     if(!found)
     {
@@ -1142,21 +1151,117 @@ CUSTOM_COMMAND_SIG(scan_prev_brace)
     view_set_cursor(app, view, seek_pos(new_pos));
 }
 
-CUSTOM_COMMAND_SIG(scan_next_brace)
+CUSTOM_COMMAND_SIG(scan_next_brace_or_close_paren)
 {
     View_ID view = get_active_view(app, Access_ReadVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
     i64 pos = view_get_cursor_pos(app, view);
-    i64 new_pos;
-    String_Const_u8 str = string_u8_litexpr("}");
-    seek_string_insensitive_forward(app, buffer, pos, 0, str, &new_pos);
+    i64 brace_pos;
+    i64 parent_pos;
     
+    String_Const_u8 str = string_u8_litexpr("}");
+    seek_string_insensitive_forward(app, buffer, pos, 0, str, &brace_pos);
+    
+    str = string_u8_litexpr(")");
+    seek_string_insensitive_forward(app, buffer, pos, 0, str, &parent_pos);
+    
+    i64 new_pos = Min(brace_pos, parent_pos);
     b32 found = (new_pos < buffer_get_size(app, buffer) && new_pos > 0);
     if(!found)
     {
         new_pos = pos;
     }
     view_set_cursor(app, view, seek_pos(new_pos));
+}
+
+CUSTOM_COMMAND_SIG(paste_and_indent_invert_mark_cursor)
+{
+    paste_and_indent(app);
+    cursor_mark_swap(app);
+}
+
+i64 smart_copied_token_cursor_pos = -1;
+i64 smart_copied_token_mark_pos = -1;
+
+i64 smart_copied_line_cursor_pos = -1;
+i64 smart_copied_line_mark_pos = -1;
+
+CUSTOM_COMMAND_SIG(custom_smart_copy)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    i64 cursor_pos = view_get_cursor_pos(app, view);
+    i64 mark_pos = view_get_mark_pos(app, view);
+    
+    if(smart_copied_line_cursor_pos == cursor_pos && smart_copied_line_mark_pos == mark_pos)
+    {
+        i64 prev_blank = get_pos_of_blank_line_grouped(app, buffer, Scan_Backward, cursor_pos);
+        prev_blank = view_get_character_legal_pos_from_pos(app, view, prev_blank);
+        
+        i64 next_blank = get_pos_of_blank_line_grouped(app, buffer, Scan_Forward, cursor_pos);
+        next_blank = view_get_character_legal_pos_from_pos(app, view, next_blank);
+        
+        Range_i64 range = {prev_blank, next_blank + 1};
+        
+        Range_i64 scope_range = {};
+        if (find_surrounding_nest(app, buffer, cursor_pos, FindNest_Scope, &scope_range)){
+            
+            i64 min = Min(cursor_pos, mark_pos);
+            i64 max = Max(cursor_pos, mark_pos);
+            
+            i64 blank_delta = (min - range.start) + (range.end - max);
+            i64 scope_delta = (min - scope_range.start) + (scope_range.end - max);
+            
+            if(scope_delta < blank_delta)
+            {
+                range = scope_range;
+            }
+        }
+        
+        view_set_cursor_and_preferred_x(app, view, seek_pos(range.end));
+        view_set_mark(app, view, seek_pos(range.start));
+    }
+    else if(smart_copied_token_cursor_pos == cursor_pos && smart_copied_token_mark_pos == mark_pos)
+    {
+        seek_beginning_of_line(app);
+        set_mark(app);
+        seek_end_of_line(app);
+        
+        smart_copied_line_cursor_pos = view_get_cursor_pos(app, view);
+        smart_copied_line_mark_pos = view_get_mark_pos(app, view);
+    }
+    else
+    {
+        smart_copied_token_cursor_pos = -1;
+        smart_copied_token_mark_pos = -1;
+        
+        smart_copied_line_cursor_pos = -1;
+        smart_copied_line_mark_pos = -1;
+        
+        if(cursor_pos == mark_pos)
+        {
+            Range_i64 token_range = enclose_pos_tokens(app, buffer, view_get_cursor_pos(app, view));
+            view_set_cursor_and_preferred_x(app, view, seek_pos(token_range.end));
+            view_set_mark(app, view, seek_pos(token_range.start));
+            
+            smart_copied_token_cursor_pos = view_get_cursor_pos(app, view);
+            smart_copied_token_mark_pos = view_get_mark_pos(app, view);
+        }
+    }
+    
+    copy(app);
+}
+
+CUSTOM_COMMAND_SIG(add_blank_line_after_cursor)
+{
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    
+    move_down(app);
+    seek_beginning_of_line(app);
+    i64 pos = view_get_cursor_pos(app, view);
+    buffer_replace_range(app, buffer, Ii64(pos), SCu8("\n"));
 }
 
 function void setup_all_mappings(Mapping *mapping, i64 scopeid)
@@ -1167,37 +1272,47 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     
     // I/J/K/L
     
-    Bind(custom_move_up,                KeyCode_I, KeyCode_Alt);
-    Bind(custom_move_down,              KeyCode_K, KeyCode_Alt);
-    Bind(custom_move_left,              KeyCode_J, KeyCode_Alt);
-    Bind(custom_move_right,             KeyCode_L, KeyCode_Alt);
+    Bind(scan_prev_brace_or_open_paren,                KeyCode_I, KeyCode_Control);
+    Bind(scan_next_brace_or_close_paren,              KeyCode_K, KeyCode_Control);
+    Bind(custom_move_left,                         KeyCode_J, KeyCode_Control);
+    Bind(custom_move_right,                        KeyCode_L, KeyCode_Control);
     
-    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_left_whitespace_boundary,    KeyCode_J, KeyCode_Alt, KeyCode_Shift);
-    Bind(move_right_whitespace_boundary,   KeyCode_L, KeyCode_Alt, KeyCode_Shift);
+    Bind(custom_move_up,                           KeyCode_I, KeyCode_Alt);
+    Bind(custom_move_down,                         KeyCode_K, KeyCode_Alt);
+    Bind(move_left_alpha_numeric_boundary,         KeyCode_J, KeyCode_Alt);
+    Bind(move_right_alpha_numeric_boundary,        KeyCode_L, KeyCode_Alt);
     
-    Bind(move_up_to_blank_line_end,                  KeyCode_I, KeyCode_Control);
-    Bind(move_down_to_blank_line_end,                KeyCode_K, KeyCode_Control);
-    Bind(move_left_alpha_numeric_boundary,           KeyCode_J, KeyCode_Control);
-    Bind(move_right_alpha_numeric_boundary,          KeyCode_L, KeyCode_Control);
+    Bind(move_up_to_blank_line_end,                KeyCode_I, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_down_to_blank_line_end,              KeyCode_K, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_left_whitespace_boundary,            KeyCode_J, KeyCode_Alt, KeyCode_Shift);
+    Bind(move_right_whitespace_boundary,           KeyCode_L, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(scan_prev_brace,                  KeyCode_I, KeyCode_Alt, KeyCode_Control);
-    Bind(scan_next_brace,                KeyCode_K, KeyCode_Alt, KeyCode_Control);
+    Bind(move_up_to_blank_line_end,            KeyCode_I, KeyCode_Alt, KeyCode_Control);
+    Bind(move_down_to_blank_line_end,           KeyCode_K, KeyCode_Alt, KeyCode_Control);
     Bind(move_to_line_boundary_backward,           KeyCode_J, KeyCode_Alt, KeyCode_Control);
-    Bind(move_to_line_boundary_forward,          KeyCode_L, KeyCode_Alt, KeyCode_Control);
+    Bind(move_to_line_boundary_forward,            KeyCode_L, KeyCode_Alt, KeyCode_Control);
     
-    Bind(move_line_up,           KeyCode_I, KeyCode_Control, KeyCode_Shift);
-    Bind(move_line_down,         KeyCode_K,KeyCode_Control,KeyCode_Shift);
-    Bind(swap_token_right, KeyCode_L, KeyCode_Control, KeyCode_Shift);
-    Bind(swap_token_left, KeyCode_J, KeyCode_Control, KeyCode_Shift);
+    Bind(move_line_up,                             KeyCode_I, KeyCode_Control, KeyCode_Shift);
+    Bind(move_line_down,                           KeyCode_K,KeyCode_Control,KeyCode_Shift);
+    Bind(swap_token_right,                         KeyCode_L, KeyCode_Control, KeyCode_Shift);
+    Bind(swap_token_left,                          KeyCode_J, KeyCode_Control, KeyCode_Shift);
+    
+    // Other navigation commands
+    
+    Bind(goto_prev_function, KeyCode_9, KeyCode_Alt);
+    Bind(goto_next_function, KeyCode_0, KeyCode_Alt);
+    
+    Bind(goto_beginning_of_file, KeyCode_9, KeyCode_Alt, KeyCode_Shift);
+    Bind(goto_end_of_file, KeyCode_0, KeyCode_Alt, KeyCode_Shift);
+    
+    Bind(select_prev_scope_absolute, KeyCode_Minus, KeyCode_Alt);
+    Bind(select_next_scope_absolute, KeyCode_Equal, KeyCode_Alt);
+    
+    Bind(select_prev_top_most_scope, KeyCode_Minus, KeyCode_Alt, KeyCode_Shift);
+    Bind(select_next_top_most_scope, KeyCode_Equal, KeyCode_Alt, KeyCode_Shift);
+    
     
     // Arrows
-    Bind(goto_prev_function, KeyCode_Up, KeyCode_Alt);
-    Bind(goto_next_function, KeyCode_Down, KeyCode_Alt);
-    
-    Bind(goto_beginning_of_file, KeyCode_Up, KeyCode_Alt, KeyCode_Shift);
-    Bind(goto_end_of_file, KeyCode_Down, KeyCode_Alt, KeyCode_Shift);
     
     Bind(move_range_up,          KeyCode_Up, KeyCode_Shift, KeyCode_Control);
     Bind(move_range_down,         KeyCode_Down, KeyCode_Shift, KeyCode_Control);
@@ -1221,30 +1336,33 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     
     // copy and paste
     
-    Bind(copy,                        KeyCode_C, KeyCode_Alt);
-    Bind(copy_line,                   KeyCode_C, KeyCode_Alt, KeyCode_Shift);
+    Bind(custom_smart_copy,                        KeyCode_C, KeyCode_Alt);
+    Bind(copy_line,                   KeyCode_C, KeyCode_Alt, KeyCode_Control);
     Bind(copy_token,                   KeyCode_C, KeyCode_Control, KeyCode_Shift);
     
     Bind(paste_and_indent,            KeyCode_V, KeyCode_Alt);
+    Bind(paste_and_indent_invert_mark_cursor, KeyCode_V, KeyCode_Alt, KeyCode_Control);
     Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Shift);
     Bind(cut,                         KeyCode_X, KeyCode_Alt);
+    Bind(delete_range,                KeyCode_X, KeyCode_Alt, KeyCode_Shift);
+    Bind(cut_line,                    KeyCode_X, KeyCode_Alt, KeyCode_Control);
     Bind(cut_token,                    KeyCode_X, KeyCode_Shift, KeyCode_Control);
-    Bind(cut_add_to_clip,             KeyCode_X, KeyCode_Control);
-    Bind(delete_line_add_to_clip,     KeyCode_X, KeyCode_Alt, KeyCode_Control);
     
-    Bind(duplicate_line,              KeyCode_H, KeyCode_Alt);
+    Bind(cut_add_to_clip,             KeyCode_Z, KeyCode_Alt);
+    Bind(delete_line_add_to_clip,     KeyCode_Z, KeyCode_Alt, KeyCode_Control);
+    
+    Bind(add_blank_line_after_cursor,              KeyCode_H, KeyCode_Alt);
+    Bind(duplicate_line,              KeyCode_H, KeyCode_Alt, KeyCode_Control);
     Bind(duplicate_range,              KeyCode_H, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(delete_line,                 KeyCode_Backspace, KeyCode_Alt, KeyCode_Shift);
-    Bind(cut_line,                    KeyCode_Backspace, KeyCode_Alt, KeyCode_Control);
-    
+    Bind(delete_line,                 KeyCode_Backspace, KeyCode_Alt, KeyCode_Control);
     Bind(delete_next_line,            KeyCode_Delete, KeyCode_Alt, KeyCode_Control);
     
     // Delete Text Commands
     
-    Bind(snipe_backward_whitespace_or_token_boundary, KeyCode_Backspace, KeyCode_Alt);
+    Bind(backspace_alpha_numeric_boundary, KeyCode_Backspace, KeyCode_Alt);
+    Bind(snipe_backward_whitespace_or_token_boundary, KeyCode_Backspace, KeyCode_Alt, KeyCode_Shift);
     Bind(snipe_forward_whitespace_or_token_boundary,  KeyCode_Delete, KeyCode_Alt);
     
     // Search Commands
@@ -1262,14 +1380,16 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(goto_line,                   KeyCode_G, KeyCode_Alt, KeyCode_Shift);
     Bind(jump_to_definition_at_cursor, KeyCode_G, KeyCode_Alt);
     
-    Bind(query_replace,               KeyCode_R, KeyCode_Alt);
+    Bind(replace_in_buffer, KeyCode_R, KeyCode_Alt);
     Bind(replace_in_range,            KeyCode_R, KeyCode_Alt, KeyCode_Shift);
-    Bind(query_replace_in_all_buffers,   KeyCode_R, KeyCode_Control);
     Bind(replace_in_all_buffers,   KeyCode_R, KeyCode_Alt, KeyCode_Control);
+    
+    Bind(query_replace,               KeyCode_Q, KeyCode_Alt);
+    Bind(query_replace_in_all_buffers,   KeyCode_Q, KeyCode_Alt, KeyCode_Shift);
     
     // Misc
     
-    Bind(exit_4coder, KeyCode_Q, KeyCode_Alt);
+    //Bind(exit_4coder, KeyCode_Q, KeyCode_Alt);
     
     Bind(goto_next_jump,                KeyCode_N, KeyCode_Alt);
     Bind(goto_prev_jump,                KeyCode_N, KeyCode_Alt, KeyCode_Shift);
@@ -1281,17 +1401,15 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(keyboard_macro_start_stop_recording , KeyCode_M, KeyCode_Alt);
     Bind(keyboard_macro_replay,           KeyCode_M, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(command_lister,                KeyCode_Z, KeyCode_Alt);
+    Bind(command_lister,                KeyCode_Comma, KeyCode_Alt);
     Bind(snippet_lister,              KeyCode_Period, KeyCode_Alt);
-    
-    //Bind(view_jump_list_with_lister_and_close_jump_list,  KeyCode_Period, KeyCode_Alt);
     
     Bind(save_all_dirty_and_build_in_build_panel,          KeyCode_Return, KeyCode_Alt);
     Bind(close_build_panel,             KeyCode_Return, KeyCode_Alt, KeyCode_Shift);
     
     Bind(comment_line_toggle,        KeyCode_ForwardSlash, KeyCode_Alt);
     Bind(comment_block, KeyCode_ForwardSlash, KeyCode_Shift, KeyCode_Alt);
-    Bind(if0_off,                KeyCode_0, KeyCode_Alt);
+    Bind(if0_off,                KeyCode_ForwardSlash, KeyCode_Alt, KeyCode_Control);
     
     Bind(delete_to_end_of_line_and_terminate, KeyCode_Quote, KeyCode_Alt);
     Bind(delete_from_beginning_of_line, KeyCode_Quote, KeyCode_Alt, KeyCode_Shift);
@@ -1304,14 +1422,9 @@ function void setup_all_mappings(Mapping *mapping, i64 scopeid)
     Bind(place_line_before_scope_in_scope, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
     Bind(place_line_after_scope_in_scope, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Shift);
     
-    Bind(select_next_scope_absolute, KeyCode_RightBracket, KeyCode_Control);
-    Bind(select_prev_scope_absolute, KeyCode_LeftBracket, KeyCode_Control);
-    
-    Bind(select_prev_top_most_scope, KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Control);
-    Bind(select_next_top_most_scope, KeyCode_RightBracket, KeyCode_Alt, KeyCode_Control);
-    
     // NOTE(Leonardo): currently unused commands
 #if 0
+    //Bind(view_jump_list_with_lister_and_close_jump_list,  KeyCode_Period, KeyCode_Alt);
     Bind(place_in_scope,             KeyCode_LeftBracket, KeyCode_Alt, KeyCode_Shift);
     Bind(delete_current_scope_custom,       KeyCode_RightBracket, KeyCode_Control);
     

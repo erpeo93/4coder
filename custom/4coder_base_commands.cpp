@@ -1151,10 +1151,10 @@ struct String_Pair{
 };
 
 internal String_Pair
-query_user_replace_pair(Application_Links *app, Arena *arena){
+query_user_replace_pair(Application_Links *app, Arena *arena, String_Const_u8 prompt){
     Query_Bar *replace = push_array(arena, Query_Bar, 1);
     u8 *replace_space = push_array(arena, u8, KB(1));
-    replace->prompt = string_u8_litexpr("Replace: ");
+    replace->prompt = prompt;
     replace->string = SCu8(replace_space, (u64)0);
     replace->string_capacity = KB(1);
     
@@ -1176,10 +1176,10 @@ query_user_replace_pair(Application_Links *app, Arena *arena){
 // NOTE(allen): This is a bit of a hacky setup because of Query_Bar lifetimes.  This must be
 // called as the last operation of a command.
 internal void
-replace_in_range_query_user(Application_Links *app, Buffer_ID buffer, Range_i64 range){
+replace_in_range_query_user(Application_Links *app, Buffer_ID buffer, Range_i64 range, String_Const_u8 prompt){
     Scratch_Block scratch(app);
     Query_Bar_Group group(app);
-    String_Pair pair = query_user_replace_pair(app, scratch);
+    String_Pair pair = query_user_replace_pair(app, scratch, prompt);
     if (pair.valid){
         replace_in_range(app, buffer, range, pair.a, pair.b);
     }
@@ -1191,7 +1191,7 @@ CUSTOM_DOC("Queries the user for a needle and string. Replaces all occurences of
     View_ID view = get_active_view(app, Access_ReadWriteVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
     Range_i64 range = get_view_range(app, view);
-    replace_in_range_query_user(app, buffer, range);
+    replace_in_range_query_user(app, buffer, range, string_u8_litexpr("Replace In Range: "));
 }
 
 CUSTOM_COMMAND_SIG(replace_in_buffer)
@@ -1200,7 +1200,7 @@ CUSTOM_DOC("Queries the user for a needle and string. Replaces all occurences of
     View_ID view = get_active_view(app, Access_ReadWriteVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
     Range_i64 range = buffer_range(app, buffer);
-    replace_in_range_query_user(app, buffer, range);
+    replace_in_range_query_user(app, buffer, range, string_u8_litexpr("Replace: "));
 }
 
 CUSTOM_COMMAND_SIG(replace_in_all_buffers)
@@ -1210,7 +1210,7 @@ CUSTOM_DOC("Queries the user for a needle and string. Replaces all occurences of
     
     Scratch_Block scratch(app);
     Query_Bar_Group group(app);
-    String_Pair pair = query_user_replace_pair(app, scratch);
+    String_Pair pair = query_user_replace_pair(app, scratch, string_u8_litexpr("Replace In All Buffers: "));
     for (Buffer_ID buffer = get_buffer_next(app, 0, Access_ReadWriteVisible);
          buffer != 0;
          buffer = get_buffer_next(app, buffer, Access_ReadWriteVisible)){
@@ -1298,7 +1298,11 @@ CUSTOM_DOC("Queries the user for two strings, and incrementally replaces every o
 {
     View_ID view = get_active_view(app, Access_ReadWriteVisible);
     Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+    
     if (buffer != 0){
+        i64 mark_pos = view_get_mark_pos(app, view);
+        i64 cursor_pos = view_get_cursor_pos(app, view);
+        
         Query_Bar_Group group(app);
         Query_Bar replace = {};
         u8 replace_space[1024];
@@ -1309,6 +1313,9 @@ CUSTOM_DOC("Queries the user for two strings, and incrementally replaces every o
             if (replace.string.size > 0){
                 i64 pos = view_get_cursor_pos(app, view);
                 query_replace_parameter(app, replace.string, pos, false);
+                
+                view_set_cursor_and_preferred_x(app, view, seek_pos(cursor_pos));
+                view_set_mark(app, view, seek_pos(mark_pos));
             }
         }
     }
