@@ -10,6 +10,7 @@
 #include "4coder_base_types.h"
 #include "4coder_token.h"
 #include "generated/lexer_cpp.h"
+#include "generated/lexer_odin.h"
 
 #include "4coder_base_types.cpp"
 #include "4coder_stringf.cpp"
@@ -17,6 +18,7 @@
 
 #include "4coder_token.cpp"
 #include "generated/lexer_cpp.cpp"
+#include "generated/lexer_odin.cpp"
 
 #include "4coder_file.h"
 
@@ -678,9 +680,24 @@ parse_custom_id(Arena *arena, Meta_Command_Entry_Arrays *arrays, Reader *reader)
 
 ///////////////////////////////
 
+static Token_List call_lex_function_based_on_file_name(Arena* arena, u8* source_name, String_Const_u8 text)
+{
+    Token_List result = {};
+    String_Const_u8 extension = string_file_extension(SCu8(source_name));
+    if (string_match(extension, string_u8_litexpr("odin")))
+{
+        result = lex_full_input_odin(arena, text);
+    }
+    else
+{
+ result = lex_full_input_cpp(arena, text);
+}
+    return result;
+}
+
 static void
 parse_text(Arena *arena, Meta_Command_Entry_Arrays *entry_arrays, u8 *source_name, String_Const_u8 text){
-    Token_List token_list = lex_full_input_cpp(arena, text);
+    Token_List token_list = call_lex_function_based_on_file_name(arena, source_name, text);
     Token_Array array = token_array_from_list(arena, &token_list);
     
     Reader reader_ = make_reader(arena, array, source_name, text);

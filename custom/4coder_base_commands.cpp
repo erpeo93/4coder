@@ -524,6 +524,18 @@ CUSTOM_DOC("Seek left for boundary between alphanumeric characters and non-alpha
     current_view_scan_move(app, Scan_Backward, push_boundary_list(scratch, boundary_alpha_numeric));
 }
 
+CUSTOM_COMMAND_SIG(move_right_alpha_numeric_underscore_boundary)
+{
+    Scratch_Block scratch(app);
+    current_view_scan_move(app, Scan_Forward, push_boundary_list(scratch, boundary_alpha_numeric_underscore));
+}
+
+CUSTOM_COMMAND_SIG(move_left_alpha_numeric_underscore_boundary)
+{
+    Scratch_Block scratch(app);
+    current_view_scan_move(app, Scan_Backward, push_boundary_list(scratch, boundary_alpha_numeric_underscore));
+}
+
 CUSTOM_COMMAND_SIG(move_right_alpha_numeric_or_camel_boundary)
 CUSTOM_DOC("Seek right for boundary between alphanumeric characters or camel case word and non-alphanumeric characters.")
 {
@@ -1241,7 +1253,7 @@ query_replace_base(Application_Links *app, View_ID view, Buffer_ID buffer_id, i6
     
     view_disable_highlight_range(app, view);
     
-    if (in.abort){
+    if (in.abort || match_key_code(&in, KeyCode_Escape)){
         return;
     }
     

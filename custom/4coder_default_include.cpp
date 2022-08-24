@@ -32,6 +32,7 @@
 
 #include "4coder_token.h"
 #include "generated/lexer_cpp.h"
+#include "generated/lexer_odin.h"
 
 #include "4coder_variables.h"
 //#include "4coder_audio.h"
@@ -95,6 +96,7 @@
 #include "4coder_command_map.cpp"
 
 #include "generated/lexer_cpp.cpp"
+#include "generated/lexer_odin.cpp"
 
 #include "4coder_default_map.cpp"
 #include "4coder_mac_map.cpp"

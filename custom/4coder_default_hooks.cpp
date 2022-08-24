@@ -667,11 +667,69 @@ parse_async__inner(Async_Context *actx, Buffer_ID buffer_id,
     }
 }
 
+static Token_List call_lex_function_based_on_file_name(Arena* arena, String_Const_u8 buffer_name, String_Const_u8 text)
+{
+    Token_List result = {};
+    String_Const_u8 extension = string_file_extension(buffer_name);
+    if (string_match(extension, string_u8_litexpr("odin")))
+    {
+        result = lex_full_input_odin(arena, text);
+    }
+    else
+    {
+        result = lex_full_input_cpp(arena, text);
+    }
+    return result;
+}
+
+static Token_List call_lex_function_breaks_based_on_file_name(Application_Links* app, Async_Context* actx, Arena* arena, String_Const_u8 buffer_name, String_Const_u8 text, b32* canceled)
+{
+    i32 limit_factor = 10000;
+    
+    Token_List result = {};
+    
+    String_Const_u8 extension = string_file_extension(buffer_name);
+    if (string_match(extension, string_u8_litexpr("odin")))
+    {
+        Lex_State_Odin state = {};
+        lex_full_input_odin_init(&state, text);
+        for (;;){
+            ProfileBlock(app, "async lex block");
+            if (lex_full_input_odin_breaks(arena, &result, &state, limit_factor)){
+                break;
+            }
+            if (async_check_canceled(actx)){
+                *canceled = true;
+                break;
+            }
+        }
+    }
+    else
+    {
+        Lex_State_Cpp state = {};
+        lex_full_input_cpp_init(&state, text);
+        for (;;){
+            ProfileBlock(app, "async lex block");
+            if (lex_full_input_cpp_breaks(arena, &result, &state, limit_factor)){
+                break;
+            }
+            if (async_check_canceled(actx)){
+                *canceled = true;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
 function void
 do_full_lex_async__inner(Async_Context *actx, Buffer_ID buffer_id){
     Application_Links *app = actx->app;
     ProfileScope(app, "async lex");
     Scratch_Block scratch(app);
+    
+    String_Const_u8 buffer_name = push_buffer_file_name(app, scratch, buffer_id);
     
     String_Const_u8 contents = {};
     {
@@ -682,23 +740,8 @@ do_full_lex_async__inner(Async_Context *actx, Buffer_ID buffer_id){
         release_global_frame_mutex(app);
     }
     
-    i32 limit_factor = 10000;
-    
-    Token_List list = {};
     b32 canceled = false;
-    
-    Lex_State_Cpp state = {};
-    lex_full_input_cpp_init(&state, contents);
-    for (;;){
-        ProfileBlock(app, "async lex block");
-        if (lex_full_input_cpp_breaks(scratch, &list, &state, limit_factor)){
-            break;
-        }
-        if (async_check_canceled(actx)){
-            canceled = true;
-            break;
-        }
-    }
+    Token_List list = call_lex_function_breaks_based_on_file_name(app, actx, scratch, buffer_name, contents, &canceled);
     
     if (!canceled){
         ProfileBlock(app, "async lex save results (before mutex)");
@@ -747,7 +790,8 @@ BUFFER_HOOK_SIG(default_begin_buffer){
                     string_match(ext, string_u8_litexpr("h")) ||
                     string_match(ext, string_u8_litexpr("c")) ||
                     string_match(ext, string_u8_litexpr("hpp")) ||
-                    string_match(ext, string_u8_litexpr("cc"))){
+                    string_match(ext, string_u8_litexpr("cc")) ||
+                    string_match(ext, string_u8_litexpr("odin"))){
                     treat_as_code = true;
                 }
                 
@@ -994,7 +1038,9 @@ BUFFER_EDIT_RANGE_SIG(default_buffer_edit_range){
             Range_i64 relex_range = Ii64(token_first->pos, token_resync->pos + token_resync->size + text_shift);
             String_Const_u8 partial_text = push_buffer_range(app, scratch, buffer_id, relex_range);
             
-            Token_List relex_list = lex_full_input_cpp(scratch, partial_text);
+            String_Const_u8 buffer_name = push_buffer_base_name(app, scratch, buffer_id);
+            
+            Token_List relex_list = call_lex_function_based_on_file_name(scratch, buffer_name, partial_text);
             if (relex_range.one_past_last < buffer_get_size(app, buffer_id)){
                 token_drop_eof(&relex_list);
             }

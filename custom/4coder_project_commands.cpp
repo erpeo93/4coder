@@ -984,7 +984,7 @@ CUSTOM_DOC("Run an 'fkey command' configured in a project.4coder file.  Determin
             got_ind = true;
         }
         else if (KeyCode_1 <= input.event.key.code && input.event.key.code <= KeyCode_9){
-            ind = (input.event.key.code - '1');
+            ind = (input.event.key.code - KeyCode_1);
             got_ind = true;
         }
         else if (input.event.key.code == KeyCode_0){

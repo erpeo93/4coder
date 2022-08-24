@@ -2452,10 +2452,10 @@ find_surrounding_nest(Application_Links *app, Buffer_ID buffer, i64 pos,
 
 function void
 select_scope(Application_Links *app, View_ID view, Range_i64 range){
-    view_set_cursor_and_preferred_x(app, view, seek_pos(range.first));
-    view_set_mark(app, view, seek_pos(range.end));
-    view_look_at_region(app, view, range.first, range.end);
-    no_mark_snap_to_cursor(app, view);
+        view_set_cursor_and_preferred_x(app, view, seek_pos(range.first));
+        view_set_mark(app, view, seek_pos(range.end - 1));
+        view_look_at_region(app, view, range.first, range.end - 1);
+        no_mark_snap_to_cursor(app, view);
 }
 
 ////////////////////////////////

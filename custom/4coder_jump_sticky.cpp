@@ -471,10 +471,10 @@ CUSTOM_DOC("If a buffer containing jump locations has been locked in, goes to th
         i64 cursor_position = view_get_cursor_pos(app, jump_state.view);
         Buffer_Cursor cursor = view_compute_cursor(app, jump_state.view, seek_pos(cursor_position));
         i64 line = get_line_from_list(app, jump_state.list, jump_state.list_index);
+        goto_next_filtered_jump(app, jump_state.list, jump_state.view, jump_state.list_index, 1, true, true);
         if (line <= cursor.line){
             jump_state.list_index += 1;
         }
-        goto_next_filtered_jump(app, jump_state.list, jump_state.view, jump_state.list_index, 1, true, true);
     }
 }
 

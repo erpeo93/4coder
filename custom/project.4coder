@@ -46,6 +46,10 @@ command_list = {
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
    .cmd = { {"bin\\build_one_time languages\\4coder_cpp_lexer_gen.cpp ..\\build", .os ="win" },
            }, },
+ { .name = "build odin lexer generator",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { {"bin\\build_one_time languages\\4coder_odin_lexer_gen.cpp generated", .os ="win" },
+           }, },
  
  { .name = "build token tester",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
@@ -63,3 +67,4 @@ fkey_command[2] = "build C++ lexer generator";
 fkey_command[3] = "build token tester";
 fkey_command[4] = "run one time";
 fkey_command[5] = "build super x86";
+fkey_command[6] = "build odin lexer generator";

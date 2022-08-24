@@ -59,6 +59,41 @@ check_is_note(String_Const_u8 line, u64 colon_pos){
     return(is_note);
 }
 
+function Parsed_Jump parse_jump_location_custom(String_Const_u8 line)
+{
+    Parsed_Jump jump = {};
+    
+    String_Const_u8 reduced_line = string_skip_chop_whitespace(line);
+    u64 whitespace_length = (u64)(reduced_line.str - line.str);
+    line = reduced_line;
+    
+    // Try to parse odin style 
+    i64 left_paren_pos = string_find_first(line, '(');
+    i64 right_paren_pos = left_paren_pos + string_find_first(string_skip(line, left_paren_pos), ')');
+    
+    u64 colon_pos1 = string_find_first(line, ':');
+    if (character_is_slash(string_get_character(line, colon_pos1 + 1))){
+        colon_pos1 = string_find_first(string_skip(line, colon_pos1 + 1), ':') + colon_pos1 + 1;
+    }
+    
+    String_Const_u8 file_name = string_prefix(line, left_paren_pos);
+    String_Const_u8 line_number = string_prefix(string_skip(line, left_paren_pos + 1), colon_pos1 - (left_paren_pos + 1));
+    String_Const_u8 column_number = string_prefix(string_skip(line, colon_pos1 + 1), right_paren_pos - (colon_pos1 + 1));
+    
+    if (string_is_integer(line_number, 10)){
+        if (file_name.size > 0 && line_number.size > 0){
+            jump.location.file = file_name;
+            jump.location.line = (i32)string_to_integer(line_number, 10);
+            jump.location.column = (i32) string_to_integer(column_number, 10);;
+            jump.colon_position = (i32)(colon_pos1 + whitespace_length);
+            jump.success = true;
+        }
+    }
+    jump.sub_jump_indented = (string_get_character(line, 0) == ' ');
+    
+    return jump;
+}
+
 function Parsed_Jump
 parse_jump_location(String_Const_u8 line){
     Parsed_Jump jump = {};
@@ -173,6 +208,11 @@ parse_jump_location(String_Const_u8 line){
             }
         }
     }
+    
+    if(!jump.success)
+{
+        jump = parse_jump_location_custom(line);
+}
     
     if (!jump.success){
         block_zero_struct(&jump);
